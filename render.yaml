@@ -1,0 +1,43 @@
+services:
+  - type: web
+    name: dial
+    runtime: node
+    plan: starter
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/config
+    disk:
+      name: dial-data
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: NODE_VERSION
+        value: "24"
+      - key: DIAL_DB
+        value: /var/data/dial.db
+      - key: PUBLIC_URL
+        sync: false
+      - key: DIAL_MCP_KEYS
+        sync: false
+      - key: PAYPAL_CLIENT_ID
+        sync: false
+      - key: PAYPAL_CLIENT_SECRET
+        sync: false
+      - key: PAYPAL_WEBHOOK_ID
+        sync: false
+      - key: PAYPAL_PARTNER_ID
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: TWILIO_ACCOUNT_SID
+        sync: false
+      - key: TWILIO_AUTH_TOKEN
+        sync: false
+      - key: TWILIO_FROM_NUMBER
+        sync: false
+      - key: DIAL_CALL_ALLOWLIST
+        sync: false
+      - key: DIAL_SIM_PAYEE
+        sync: false
+      - key: GOOGLE_MAPS_API_KEY
+        sync: false

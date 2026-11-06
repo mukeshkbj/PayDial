@@ -90,6 +90,16 @@ To see the money gate block a deal, call Tony's Pizza. For the shortest full loo
 
 `npm run dev` starts the API server on port 8787 and the Vite dev server on port 5173. It works in cmd.exe, PowerShell, and POSIX shells. Vite sends `/api`, `/paypal`, `/fake-paypal`, and `/mcp` to the API server.
 
+### Run it on your own PayPal sandbox
+
+The same steps move sandbox money if you give Dial your sandbox keys. The calls stay scripted, so you need no phone or OpenAI key.
+
+1. In the PayPal Developer Dashboard, open Apps & Credentials, Sandbox, and copy the client ID and secret of an app.
+2. Under Sandbox accounts, pick a business account to act as the shop, and a personal account to act as the buyer.
+3. Copy `.env.example` to `.env`, and fill in `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET`, and `DIAL_SIM_PAYEE` (the shop's sandbox email).
+4. Run `npm run dev`. The badge now says "PayPal sandbox · no real money".
+5. Call Rosa's Panadería, and approve on PayPal's sandbox page as the buyer. "Verify this receipt" then reads the hash back from the PayPal order's `custom_id`.
+
 Checks:
 
 ```sh

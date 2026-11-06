@@ -5,7 +5,7 @@ const run = (args: string[], env: NodeJS.ProcessEnv = process.env) =>
   spawn(process.execPath, args, { stdio: "inherit", detached: !windows, env })
 
 const children = [
-  run(["--watch", "src/main.ts"], { ...process.env, PUBLIC_URL: "http://localhost:5173" }),
+  run(["--env-file-if-exists=.env", "--watch", "src/main.ts"], { ...process.env, PUBLIC_URL: "http://localhost:5173" }),
   run(["node_modules/vite/bin/vite.js", "--config", "web/vite.config.ts"]),
 ]
 

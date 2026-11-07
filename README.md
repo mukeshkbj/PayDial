@@ -99,6 +99,7 @@ The same steps move sandbox money if you give Dial your sandbox keys. The calls 
 3. Copy `.env.example` to `.env`, and fill in `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET`, and `DIAL_SIM_PAYEE` (the shop's sandbox email).
 4. Run `npm run dev`. The badge now says "PayPal sandbox · no real money".
 5. Call Rosa's Panadería, and approve on PayPal's sandbox page as the buyer. "Verify this receipt" then reads the hash back from the PayPal order's `custom_id`.
+6. Run `npm run proof`. For each errand with a PayPal order, it reads the order from PayPal, and checks the receipt hash against the order's `custom_id`. It prints one table row per order.
 
 Checks:
 

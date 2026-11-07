@@ -275,7 +275,7 @@ npm run typecheck
 npm run build
 ```
 
-On 2026-11-06, `npm test` ran 201 tests and 201 passed. The tests use `node:test` and run against fakes of PayPal, Twilio, OpenAI and Google. They cover the money gate, every simulated script, the MCP loop, Text Dial, the PayPal REST adapter, webhook checks, restart recovery, and the races around one payment. The real adapters have not run against the live services (see the limits below).
+On 2026-11-07, `npm test` ran 202 tests and 202 passed. The tests use `node:test` and run against fakes of PayPal, Twilio, OpenAI and Google. They cover the money gate, every simulated script, the MCP loop, Text Dial, the PayPal REST adapter, webhook checks, restart recovery, and the races around one payment. The real adapters have not run against the live services (see the limits below).
 
 More evidence is in `docs/evidence/`: a Claude Code run over MCP, and an accessibility check with contrast on 12 pages in both themes and a keyboard-only errand.
 

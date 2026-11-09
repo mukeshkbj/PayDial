@@ -4,10 +4,13 @@ import { streamSSE } from "hono/streaming"
 import { z } from "zod"
 import { formatUsd, isFinished } from "./domain/errand.ts"
 import type { Errands } from "./errands.ts"
+import { ledgerRows } from "./ledger.ts"
+import type { StudioTurn } from "./ledgerAgent.ts"
 import { createMcpServer } from "./mcp.ts"
 import type { FakePayPal } from "./paypal/fake.ts"
 import type { PayPal } from "./paypal/rest.ts"
 import type { Places } from "./places/places.ts"
+import { noProducts, type Products } from "./products/channel3.ts"
 import type { FakeSms } from "./sms/sms.ts"
 import { twilioSignatureValid } from "./sms/twilio.ts"
 import type { Texts } from "./texts.ts"
@@ -23,6 +26,8 @@ type Deps = {
   texts?: Texts
   sms?: FakeSms
   twilioAuthToken?: string
+  ledgerTurn?: (turn: StudioTurn) => Promise<unknown>
+  products?: Products
 }
 
 const shopInput = z.object({ name: z.string().min(1), phone: z.string().min(1), address: z.string().optional() })
@@ -43,8 +48,8 @@ const payPalEvent = z.union([
   z.object({ event_type: z.literal("PAYMENT.CAPTURE.DENIED"), resource: z.object({ id: z.string() }) }).transform(({ resource }) => ({ kind: "denied" as const, captureId: resource.id })),
 ])
 
-export function createApp({ errands, paypal, places, publicUrl, fakePayPal, shopSays, mcpKeys, texts, sms, twilioAuthToken }: Deps) {
-  const app = new Hono()
+export function createApp({ errands, paypal, places, publicUrl, fakePayPal, shopSays, mcpKeys, texts, sms, twilioAuthToken, ledgerTurn, products = noProducts }: Deps) {
+  const app = new Hono({ strict: false })
 
   app.onError((error, c) => {
     if (error instanceof z.ZodError) return c.json({ error: `Check these fields: ${[...new Set(error.issues.map((issue) => issue.path.join(".") || "body"))].join(", ")}.` }, 400)
@@ -221,10 +226,33 @@ export function createApp({ errands, paypal, places, publicUrl, fakePayPal, shop
     app.get("/api/text/:phone", (c) => c.json(sms.thread(c.req.param("phone"))))
   }
 
+  app.get("/api/online", async (c) => {
+    const query = c.req.query("q") ?? ""
+    const online = await products.search(query).catch(() => [])
+    return c.json({ source: products.source, online })
+  })
+
+  const ledgerOpen = (key: string | undefined) => !mcpKeys.length || mcpKeys.includes(key ?? "")
+
+  app.get("/api/ledger/:key?", (c) => {
+    if (!ledgerOpen(c.req.param("key"))) return c.json({ error: "Unknown Dial key" }, 401)
+    return c.json({ rows: ledgerRows(errands.list()), agent: Boolean(ledgerTurn), payPal: fakePayPal ? "simulated" : "sandbox" })
+  })
+
+  app.post("/api/ledger-turn/:key?", async (c) => {
+    if (!ledgerOpen(c.req.param("key"))) return c.json({ error: "Unknown Dial key" }, 401)
+    if (!ledgerTurn) return c.json({ error: "The ledger agent needs ANTHROPIC_API_KEY on the server." }, 501)
+    const body = await c.req.text()
+    if (body.length > 600_000) return c.json({ error: "The conversation is too long for one turn." }, 413)
+    const turn = JSON.parse(body) as StudioTurn
+    if (!Array.isArray(turn.input)) return c.json({ error: "Check these fields: input." }, 400)
+    return c.json(await ledgerTurn(turn))
+  })
+
   app.all("/mcp/:key?", async (c) => {
     if (mcpKeys.length && !mcpKeys.includes(c.req.param("key") ?? "")) return c.json({ error: "Unknown Dial key" }, 401)
     const transport = new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true })
-    await createMcpServer(errands, places, publicUrl).connect(transport)
+    await createMcpServer(errands, places, publicUrl, products).connect(transport)
     return transport.handleRequest(c.req.raw)
   })
 

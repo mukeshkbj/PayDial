@@ -1,5 +1,6 @@
 import { AnimatePresence, motion } from "motion/react"
 import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from "react"
+import type { Online } from "../../src/products/channel3.ts"
 import { api, navigate, type Listed } from "./api.ts"
 import { Icon } from "./Icon.tsx"
 import { PREVIEWS } from "./Previews.tsx"
@@ -34,6 +35,7 @@ export function HomePage() {
   const [shops, setShops] = useState<Listed[]>()
   const [searched, setSearched] = useState("")
   const [error, setError] = useState<string>()
+  const [online, setOnline] = useState<{ source: "channel3" | "none"; online: Online[] }>()
   const heading = useRef<HTMLHeadingElement>(null)
   const jump = useRef(false)
 
@@ -44,6 +46,8 @@ export function HomePage() {
     setError(undefined)
     setSearched(text.trim())
     api.searchShops(text.trim(), near.trim()).then(setShops, (e: Error) => setError(e.message))
+    setOnline(undefined)
+    if (text.trim()) api.online(text.trim()).then(setOnline, () => undefined)
   }
 
   function showAll() {
@@ -125,6 +129,7 @@ export function HomePage() {
               </button>
             </p>
           )}
+          {searched && online?.source === "channel3" && <OnlineStrip query={searched} online={online.online} />}
           {shops && shops.length > 0 && (scenarios ? <ScenarioGrid shops={shops} /> : <ShopList shops={shops} />)}
         </section>
 
@@ -346,5 +351,32 @@ function ShopSkeleton() {
         <li key={n} />
       ))}
     </ul>
+  )
+}
+
+function OnlineStrip({ query, online }: { query: string; online: Online[] }) {
+  if (!online.length)
+    return (
+      <p className="online-none">
+        Channel3 found no online seller for “{query}”. Only a local shop has it, so Dial calls one.
+      </p>
+    )
+  return (
+    <aside className="online" aria-label={`Sold online: ${query}`}>
+      <p className="online-head">Also sold online, found by Channel3. Buy there if you don't need it today; Dial calls a shop when you do.</p>
+      <ul>
+        {online.map((item) => (
+          <li key={item.url}>
+            <a href={item.url} target="_blank" rel="noreferrer">
+              {item.image && <img src={item.image} alt="" loading="lazy" />}
+              <span>{item.title}</span>
+              <small>
+                {item.price !== null ? new Intl.NumberFormat("en-US", { style: "currency", currency: item.currency ?? "USD" }).format(item.price) : ""} · {item.domain}
+              </small>
+            </a>
+          </li>
+        ))}
+      </ul>
+    </aside>
   )
 }

@@ -15,6 +15,10 @@ Dial phones a shop that only takes calls and agrees the order with the person wh
 
 **Try it in two minutes, with no keys:** run `npm install` and `npm run dev`, open http://localhost:5173, and call Rosa's Panadería. [Run it in four commands](#run-it-in-four-commands) has the details.
 
+**The AI never touches the money.** Plain code checks every price (the money gate), the call receipt's hash goes into the PayPal order, and no tool given to any model can capture, void, refund or pay. [Evidence](docs/evidence/2026-11-09-paypal-sandbox-probe.md): on the PayPal sandbox, Dial held money for a separate shop account, then captured one hold and voided another.
+
+**Partners used:** AG Grid (AG Studio money ledger, with a Studio Agent Framework agent on Claude that reads the money but cannot move it), Channel3 (checks whether the item is sold online before Dial calls), Postman (a [collection](postman/dial.postman_collection.json) whose tests prove no AI-facing call moves money; [36 of 36 passed](postman/newman-run.txt)), Render (`render.yaml` with a persistent disk), and Claude (the shop line and the ledger agent).
+
 **PayPal APIs:** Orders v2 (`intent: AUTHORIZE`, the shop as `payee`, the call receipt hash in `custom_id`), Payments v2 (capture and void of the hold), Webhooks (signature check), and Partner Referrals (a shop signs up during the call).
 
 | | |
@@ -25,6 +29,10 @@ Dial phones a shop that only takes calls and agrees the order with the person wh
 | **3. Approve on PayPal.** Rosa's agreed $5.44. PayPal holds it. | **4. Pay at the counter.** The shop hands over the order once PayPal shows the payment. |
 | ![The receipt for the same call: the browser checks the transcript hash against the PayPal order](docs/screenshots/receipt.png) | ![Text Dial calls Rosa's after the customer replies YES, links the live captions, and texts the shop's question](docs/screenshots/text.png) |
 | **The receipt.** Your browser checks the transcript against the hash on the PayPal order. | **Text Dial.** No app: text the order. Dial asks for any missing part, reads the order back, and calls only after you reply YES. |
+
+![The money ledger: AG Studio shows holds, captures, voids and gate refusals, and the Ledger agent refuses to capture a payment](docs/screenshots/ledger.jpg)
+
+**The money ledger** (`/ledger`). AG Studio shows every errand's hold, capture, void and receipt. Asked to capture a payment, the Ledger agent (Claude) says it has no tool that can.
 
 Frames 2 to 4 and the receipt are one errand to Rosa's Panadería. Every screen above runs in the simulation: scripted shops and an in-memory PayPal.
 
@@ -213,9 +221,24 @@ Dial ends the errand and no money moves:
 | Errand | `/errand/:id` | Follow the call as live captions. Answer the agent's questions. Approve on PayPal, then pay at the counter or release the hold. The deal shows as a receipt with a stamp for each stage. |
 | Receipt | `/receipt/:id` | The call receipt. Your browser hashes the transcript and compares it with the hash on the PayPal order. |
 | Text Dial | `/text` | A phone simulator for Text Dial, with example orders to send. |
+| Money ledger | `/ledger` or `/ledger/<key>` | An AG Studio dashboard of every errand's money: held, paid, released, prices the gate refused, PayPal IDs and receipt hashes. Its AI Assistant is the Ledger agent. |
 | Shop line | `/shop-line/:id` | Play the shop yourself: read what the agent says and type replies. This needs `ANTHROPIC_API_KEY` or `OPENAI_API_KEY`. |
 
 The interface is set in Atkinson Hyperlegible Next and Atkinson Hyperlegible Mono. The Braille Institute made these typefaces for readers with low vision. The font files and their license (SIL Open Font License) are in `web/public/fonts`. The interface icons are from the Solar set (CC BY 4.0), and the PayPal mark is from Simple Icons. Motion animates layout and state changes, and NumberFlow animates prices and counts. Both respect the reduced-motion setting.
+
+### Money ledger (AG Studio)
+
+`/ledger` embeds AG Studio (`ag-studio-react`) over one data source, `ledger`, built by `ledgerRows` in `src/ledger.ts`: one row per errand, with where the money is (`held`, `paid`, `released`), the deal and the limit, the price the money gate refused, the PayPal order, authorization and capture IDs, and the call receipt hash. The page opens on a dashboard of four value widgets, a donut by outcome and a grid of the ledger. `GET /api/ledger/<key>` serves the rows; when `DIAL_MCP_KEYS` is set, the same key is needed.
+
+The AI Assistant panel runs the **Ledger agent** on AG's Studio Agent Framework (`createAiHarness`, `directLlmRunner`). It is the primary agent, delegates to AG's own widget, page and data agents to build charts, and has one tool of Dial's own, `verify_receipt`, which hashes a transcript in the browser and compares it with the hash on the PayPal order. Every agent runs on Claude through `POST /api/ledger-turn/<key>`: `src/ledgerAgent.ts` turns a Studio turn into one Anthropic Messages request and Claude's reply back into Studio output items, and adds the rule that no tool moves money. The agent can read and chart the money. It cannot capture, void, refund or pay, because no such tool exists. Set `VITE_AG_STUDIO_LICENSE_KEY` at build time to remove the trial watermark.
+
+### Sold online (Channel3)
+
+With `CHANNEL3_API_KEY`, a search also asks Channel3's product search (`POST /v1/search`) whether the item is sold online. The home page shows the buy links, or says that only a local shop has it, so Dial calls. `find_shops` returns the same results as `sold_online`, so an assistant can offer an online purchase first and call a shop only when it must. A failed Channel3 search never hides the local shops.
+
+### Postman collection
+
+`postman/dial.postman_collection.json` runs Dial end to end from the outside: shops, an errand to its receipt, the money gate against Tony's $500 ask, Text Dial, the ledger and its agent, MCP over JSON-RPC, and a forged PayPal webhook. Its tests check that a pickup without the customer's key is refused, that no MCP tool name captures, voids or pays, and that `dial_shop` never returns a pickup key. Import it into Postman, or run `npx newman run postman/dial.postman_collection.json --delay-request 2500` against a running Dial. `postman/newman-run.txt` is a passing run on the PayPal sandbox.
 
 ### Text Dial
 
@@ -279,18 +302,18 @@ npm run typecheck
 npm run build
 ```
 
-On 2026-11-07, `npm test` ran 202 tests and 202 passed. The tests use `node:test` and run against fakes of PayPal, Twilio, OpenAI and Google. They cover the money gate, every simulated script, the MCP loop, Text Dial, the PayPal REST adapter, webhook checks, restart recovery, and the races around one payment. The real adapters have not run against the live services (see the limits below).
+On 2026-11-09, `npm test` ran 219 tests and 219 passed. The tests use `node:test` and run against fakes of PayPal, Twilio, OpenAI and Google. They cover the money gate, every simulated script, the MCP loop, Text Dial, the PayPal REST adapter, webhook checks, restart recovery, and the races around one payment. The PayPal REST adapter has also run against the PayPal sandbox, and the ledger agent's Claude bridge against Anthropic's API; the other real adapters have not run against live services (see the limits below).
 
 More evidence is in `docs/evidence/`: a Claude Code run over MCP, and an accessibility check with contrast on 12 pages in both themes and a keyboard-only errand.
 
 ## What is simulated, and the limits
 
-Everything runs today with no keys, in simulation: six scripted shops, an in-memory PayPal with an approval page, and the full MCP server. The PayPal REST, Twilio with OpenAI Realtime, and Google Places adapters are written against the official protocol documents and tested with fakes, but they have not yet run against the live services. The screen badge says "Simulation" until PayPal sandbox credentials are set.
+Everything runs today with no keys, in simulation: six scripted shops, an in-memory PayPal with an approval page, and the full MCP server. The PayPal REST adapter has run against the PayPal sandbox: a hold to a separate shop account, captured and voided ([evidence](docs/evidence/2026-11-09-paypal-sandbox-probe.md)). The Twilio with OpenAI Realtime, and Google Places adapters are written against the official protocol documents and tested with fakes, but they have not yet run against the live services. The screen badge says "Simulation" until PayPal sandbox credentials are set.
 
 - Dial runs in simulation or the PayPal sandbox only. No real money moves.
-- The PayPal REST, Twilio with OpenAI Realtime, and Google Places adapters follow the official protocol documents. They have not yet run against the live services.
+- The PayPal REST adapter's hold, capture and void have run against the PayPal sandbox. The full app loop on sandbox money, Partner Referrals and webhooks have not. The Twilio with OpenAI Realtime, and Google Places adapters follow the official protocol documents and have not yet run against the live services.
 - Dial writes every errand to the SQLite file `DIAL_DB` (default `dial.db`) on each change, with its pickup key and return secret, and loads them at start. At start Dial checks each open hold against PayPal. A call that was open at the restart is marked failed, because the call is gone. A hold that PayPal does not know is marked failed. In simulation the fake PayPal does not survive a restart, so open simulated holds are marked failed at start.
-- `intent: AUTHORIZE` with a `payee` different from the API account is unverified. It is the first sandbox probe (`npm run probe:paypal`). PayPal's documented route for paying third-party sellers in production is PayPal Complete Payments, which needs PayPal's approval ([research notes](docs/research/research-dial-feasibility.md)). If the sandbox refuses the payee, Dial needs that route; a capture at deal time with a refund at pickup has the same payee question.
+- `intent: AUTHORIZE` with a `payee` different from the API account works in the sandbox: on 2026-11-09 the probe held $1.00 for a separate sandbox business account, then captured one hold and voided another ([evidence](docs/evidence/2026-11-09-paypal-sandbox-probe.md)). Production may still differ. PayPal's documented route for paying third-party sellers in production is PayPal Complete Payments, which needs PayPal's approval ([research notes](docs/research/research-dial-feasibility.md)). If the sandbox refuses the payee, Dial needs that route; a capture at deal time with a refund at pickup has the same payee question.
 - The REST API returns the pickup key to whoever starts the errand, because the web app that starts it is the customer's. An assistant should use MCP: no MCP tool returns the key, captures or voids.
 - The payee email is the one the shop says on the call, unless the shop signs up during the call; then it is the email PayPal confirmed. For a shop that already has PayPal, Dial does not check that the email belongs to the shop. PayPal shows the payee on its approval page, before the customer approves.
 - PayPal keeps an authorization for 29 days and advises a capture within the 3-day honour period ([PayPal: authorization and honor period](https://developer.paypal.com/docs/checkout/standard/customize/authorization-honor/)). Dial captures an unclaimed hold one day after it was placed, well inside the honour period. It does not remind or reauthorize.
@@ -345,6 +368,8 @@ All variables are optional. With none set, the server runs fully simulated.
 | `TWILIO_AUTH_TOKEN` | none | Same combination as `TWILIO_ACCOUNT_SID`. |
 | `TWILIO_FROM_NUMBER` | none | Same combination as `TWILIO_ACCOUNT_SID`. This number is the outbound caller ID. |
 | `DIAL_CALL_ALLOWLIST` | none | Comma-separated phone numbers that the Twilio adapter may call. Dial rejects a real number that is not on the list. |
+| `CHANNEL3_API_KEY` | none | Turns on the Channel3 online product check in search and in `find_shops`. |
+| `VITE_AG_STUDIO_LICENSE_KEY` | none | AG Studio licence key, read at build time. Without it the ledger runs as a watermarked trial. |
 | `GOOGLE_MAPS_API_KEY` | none | With `OPENAI_API_KEY`, turns on Google Places API (New) search and menu extraction. Fixture shops stay in the results. |
 | `DIAL_MCP_KEYS` | none | Comma-separated MCP keys. If keys are set, only `/mcp/<key>` with a listed key works. If no keys are set, the MCP endpoint is open. |
 | `DIAL_SIM_STEP_MS` | `1200` | Milliseconds between the steps of a scripted call. |
@@ -385,7 +410,7 @@ Dial calls the REST API directly. It does not use the PayPal Agent Toolkit, the 
 
 ### Check PayPal with your own sandbox
 
-The probe tests the order flow against PayPal with your sandbox keys. It has not yet run against PayPal, because no keys exist yet. Set `PAYPAL_CLIENT_ID` and `PAYPAL_CLIENT_SECRET`. `start` creates a $1.00 `AUTHORIZE` order that pays the email you give, and prints an approval URL. Open the URL and approve it as a sandbox buyer. `finish` then authorizes the order, captures or voids the hold, and prints the statuses PayPal reports. The probe refuses any API address that is not a PayPal sandbox.
+The probe tests the order flow against PayPal with your sandbox keys. It ran against the PayPal sandbox on 2026-11-09; the IDs are in [the evidence](docs/evidence/2026-11-09-paypal-sandbox-probe.md). Set `PAYPAL_CLIENT_ID` and `PAYPAL_CLIENT_SECRET`. `start` creates a $1.00 `AUTHORIZE` order that pays the email you give, and prints an approval URL. Open the URL and approve it as a sandbox buyer. `finish` then authorizes the order, captures or voids the hold, and prints the statuses PayPal reports. The probe refuses any API address that is not a PayPal sandbox.
 
 ```
 npm run probe:paypal -- start <payeeEmail>
@@ -409,6 +434,7 @@ Other events, and events that match no errand in the expected state, change noth
 
 - OpenAI Realtime (default model `gpt-realtime`) runs the voice agent over Twilio Media Streams. Audio is G.711 mu-law (`audio/pcmu`) in both directions, so Twilio's stream goes to the model directly. Input transcription uses `gpt-4o-transcribe`.
 - Claude (`ANTHROPIC_MODEL`, default `claude-sonnet-5-5`) runs text-mode calls when `ANTHROPIC_API_KEY` is set; otherwise an OpenAI text model (`OPENAI_MODEL`, default `gpt-5-mini`) does. The model plays the agent and, for `llm:` shops, the shop. The OpenAI text model also extracts menus from shop websites into a fixed schema.
+- Claude also runs the Ledger agent and the agents AG Studio delegates to, through `src/ledgerAgent.ts`. None of them holds a tool that moves money.
 - The code was written with AI coding assistants: Claude Code, with Devin as a subagent for the dev script and the first draft of this README.
 
 ## Credits

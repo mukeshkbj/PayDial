@@ -1,4 +1,4 @@
-import { StrictMode, useEffect, useState } from "react"
+import { lazy, StrictMode, Suspense, useEffect, useState } from "react"
 import { createRoot } from "react-dom/client"
 import { flushSync } from "react-dom"
 import { MotionConfig } from "motion/react"
@@ -13,6 +13,8 @@ import { ShopPage } from "./ShopPage.tsx"
 import { TextPage } from "./TextPage.tsx"
 import "./styles.css"
 
+const LedgerPage = lazy(() => import("./LedgerPage.tsx").then((m) => ({ default: m.LedgerPage })))
+
 function route(path: string) {
   const [, page, id] = path.split("/")
   if (page === "shop" && id) return <ShopPage id={id} />
@@ -20,6 +22,12 @@ function route(path: string) {
   if (page === "receipt" && id) return <ReceiptPage id={id} />
   if (page === "shop-line" && id) return <ShopLinePage id={id} />
   if (page === "text") return <TextPage />
+  if (page === "ledger")
+    return (
+      <Suspense fallback={<p className="ledger-wait">Opening the ledger…</p>}>
+        <LedgerPage dialKey={id} />
+      </Suspense>
+    )
   if (page) return <Missing title="No page here" detail="Dial has no page at this address. Check the link, or find a shop." />
   return <HomePage />
 }
@@ -60,6 +68,16 @@ function App() {
         >
           <Mark />
           dial
+        </a>
+        <a
+          className="masthead-link"
+          href="/ledger"
+          onClick={(event) => {
+            event.preventDefault()
+            navigate("/ledger")
+          }}
+        >
+          Money ledger
         </a>
         <span className="sandbox">{payPal === "simulated" ? "Simulation · no real money" : "PayPal sandbox · no real money"}</span>
       </header>

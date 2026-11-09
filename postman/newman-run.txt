@@ -1,0 +1,131 @@
+Newman 6 run of dial.postman_collection.json against Dial on the builder's PC (npm run dev, PayPal sandbox keys and ANTHROPIC_API_KEY set), 2026-11-09.
+
+newman
+
+Dial: phone shops, pay with PayPal
+
+Folder 1. Shops
+Sub-folder Server config
+  GET http://localhost:5173/api/config [200 OK, 177B, 34ms]
+  Pass  returns 200
+  Pass  says whether PayPal is simulated or sandbox
+
+Sub-folder Find shops
+  GET http://localhost:5173/api/shops?q=bakery&near= [200 OK, 1.2kB, 10ms]
+  Pass  returns 200
+  Pass  lists shops with phones
+
+Sub-folder Shop and menu
+  GET http://localhost:5173/api/shops/sim-rosas-panaderia [200 OK, 1.04kB, 9ms]
+  Pass  returns 200
+  Pass  has a menu
+
+Sub-folder Sold online (Channel3)
+  GET http://localhost:5173/api/online?q=concha [200 OK, 170B, 13ms]
+  Pass  returns 200
+  Pass  names its source
+
+Folder 2. An errand, start to receipt
+Sub-folder Start an order at Sam's Bagels
+  POST http://localhost:5173/api/errands [200 OK, 474B, 9ms]
+  Pass  returns 200
+  Pass  returns a pickup key to the customer
+
+Sub-folder Read the errand
+  GET http://localhost:5173/api/errands/67dc8872-9852-4c43-9757-12542a0656d2 [200 OK, 659B, 23ms]
+  Pass  returns 200
+  Pass  is on its way
+
+Sub-folder Pickup without the key is refused
+  POST http://localhost:5173/api/errands/67dc8872-9852-4c43-9757-12542a0656d2/pickup [403 Forbidden, 259B, 15ms]
+  Pass  returns 403
+  Pass  explains why
+
+Sub-folder Pay at the counter (customer only)
+  POST http://localhost:5173/api/errands/67dc8872-9852-4c43-9757-12542a0656d2/pickup [400 Bad Request, 231B, 9ms]
+  Pass  is accepted once PayPal holds the money
+
+Sub-folder Call receipt
+  GET http://localhost:5173/api/errands/67dc8872-9852-4c43-9757-12542a0656d2/receipt [404 Not Found, 186B, 8ms]
+  Pass  has a SHA-256 hash once a deal exists
+
+Folder 3. The money gate
+Sub-folder Tony's Pizza asks for $500
+  POST http://localhost:5173/api/errands [200 OK, 492B, 9ms]
+  Pass  returns 200
+
+Sub-folder The $500 deal was blocked
+  GET http://localhost:5173/api/errands/45d26c8a-54db-40a1-b6d4-404527017c27 [200 OK, 2.63kB, 9ms]
+  Pass  returns 200
+  Pass  the gate said no to $500
+
+Sub-folder A limit over $500 is refused
+  POST http://localhost:5173/api/errands [400 Bad Request, 198B, 8ms]
+  Pass  returns 400
+
+Folder 4. Text Dial
+Sub-folder Text an order
+  POST http://localhost:5173/api/text [200 OK, 637B, 27ms]
+  Pass  returns 200
+  Pass  Dial replies by text
+
+Sub-folder Read the thread
+  GET http://localhost:5173/api/text/%2B15550100 [200 OK, 637B, 10ms]
+  Pass  returns 200
+
+Folder 5. Money ledger (AG Studio)
+Sub-folder Ledger rows
+  GET http://localhost:5173/api/ledger/ [200 OK, 24.52kB, 7ms]
+  Pass  returns 200
+  Pass  one row per errand, with where the money is
+
+Sub-folder Ledger agent turn (Claude)
+  POST http://localhost:5173/api/ledger-turn/ [200 OK, 1.02kB, 2.4s]
+  Pass  Claude answers, or the agent is off
+  Pass  no tool call moves money
+
+Folder 6. MCP for AI assistants
+Sub-folder initialize
+  POST http://localhost:5173/mcp/ [200 OK, 301B, 10ms]
+  Pass  returns 200
+
+Sub-folder tools/list: no money tools
+  POST http://localhost:5173/mcp/ [200 OK, 7.78kB, 11ms]
+  Pass  returns 200
+  Pass  five tools
+  Pass  none captures, voids or pays
+
+Sub-folder find_shops
+  POST http://localhost:5173/mcp/ [200 OK, 1.06kB, 9ms]
+  Pass  returns 200
+  Pass  returns shops and an online check
+
+Sub-folder dial_shop
+  POST http://localhost:5173/mcp/ [200 OK, 919B, 9ms]
+  Pass  returns 200
+  Pass  an errand starts, and no pickup key is returned
+
+Folder 7. PayPal routes
+Sub-folder A forged webhook changes nothing
+  POST http://localhost:5173/paypal/webhook [400 Bad Request, 194B, 7ms]
+  Pass  returns 400
+
+-------------------------------------------------------------------
+|                         |          executed |            failed |
+--------------------------+-------------------+--------------------
+|              iterations |                 1 |                 0 |
+--------------------------+-------------------+--------------------
+|                requests |                21 |                 0 |
+--------------------------+-------------------+--------------------
+|            test-scripts |                21 |                 0 |
+--------------------------+-------------------+--------------------
+|      prerequest-scripts |                 1 |                 0 |
+--------------------------+-------------------+--------------------
+|              assertions |                36 |                 0 |
+-------------------------------------------------------------------
+| total run duration: 1m 17.5s                                    |
+-------------------------------------------------------------------
+| total data received: 41.77kB (approx)                           |
+-------------------------------------------------------------------
+| average response time: 130ms [min: 7ms, max: 2.4s, s.d.: 527ms] |
+-------------------------------------------------------------------

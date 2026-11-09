@@ -385,6 +385,7 @@ export function createErrands({
     },
 
     get: (id: string): Errand | undefined => errands.get(id),
+    list: (): Errand[] => [...errands.values()],
 
     pickupKey: (id: string): string | undefined => pickupKeys.get(id),
 

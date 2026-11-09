@@ -2,6 +2,7 @@ import { useEffect, useState } from "react"
 import type { ShopCard } from "../../src/cards.ts"
 import { isFinished, type Errand, type ErrandInput } from "../../src/domain/errand.ts"
 import type { Menu, Place } from "../../src/places/places.ts"
+import type { Online } from "../../src/products/channel3.ts"
 import type { ReceiptView } from "../../src/receipt.ts"
 import type { SmsMessage } from "../../src/sms/sms.ts"
 
@@ -19,6 +20,7 @@ export function verifiedOn(card: ShopCard) {
 }
 
 export const api = {
+  online: (q: string) => request<{ source: "channel3" | "none"; online: Online[] }>(`/api/online?${new URLSearchParams({ q })}`),
   config: () => request<{ shopLine: boolean; payPal: "simulated" | "sandbox" }>("/api/config"),
   searchShops: (q: string, near: string) => request<Listed[]>(`/api/shops?${new URLSearchParams({ q, near })}`),
   shop: (id: string) => request<{ place: Place; menu: Menu | null; card: ShopCard | null }>(`/api/shops/${id}`),

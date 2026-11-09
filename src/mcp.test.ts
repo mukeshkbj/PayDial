@@ -206,3 +206,26 @@ test("a host can ask every plumber at once and compare the answers, and plumbers
   assert.equal(browse.length, 6)
   assert.ok(browse.every((shop) => !shop.name.includes("Plumb")))
 })
+
+test("find_shops also lists the item sold online when Channel3 finds it, and a failed online search still returns the shops", async () => {
+  const paypal = fakePayPal("http://dial.test")
+  const errands = createErrands({ paypal, placeCall: scriptedCalls(0), cards: sqliteCards(":memory:"), store: sqliteErrands(":memory:"), publicUrl: "http://dial.test" })
+  const online = { title: "Bagel box", price: 18, currency: "USD", url: "https://shop.example/bagels", domain: "shop.example", availability: "InStock", image: null }
+  const run = async (search: (query: string) => Promise<(typeof online)[]>) => {
+    const server = createMcpServer(errands, fixturePlaces(), "http://dial.test", { source: "channel3", search })
+    const [clientSide, serverSide] = InMemoryTransport.createLinkedPair()
+    const client = new Client({ name: "test-host", version: "1.0.0" })
+    await Promise.all([server.connect(serverSide), client.connect(clientSide)])
+    return (await client.callTool({ name: "find_shops", arguments: { query: "bagels" } })).structuredContent as Record<string, any>
+  }
+  const found = await run(async (query) => (query === "bagels" ? [online] : []))
+  assert.deepEqual(found.sold_online, [online])
+  assert.equal(found.online_source, "channel3")
+  assert.ok(found.shops.some((shop: { name: string }) => shop.name === "Sam's Bagels"))
+
+  const failed = await run(async () => {
+    throw new Error("Channel3 down")
+  })
+  assert.deepEqual(failed.sold_online, [])
+  assert.ok(failed.shops.length > 0)
+})

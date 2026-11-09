@@ -1,3 +1,4 @@
+import { noProducts, type Products } from "./products/channel3.ts"
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import { z } from "zod"
 import type { ShopCard } from "./cards.ts"
@@ -106,7 +107,7 @@ const errandOutput = {
   detail: z.string().optional(),
 }
 
-export function createMcpServer(errands: Errands, places: Places, publicUrl: string): McpServer {
+export function createMcpServer(errands: Errands, places: Places, publicUrl: string, products: Products = noProducts): McpServer {
   const server = new McpServer({ name: "dial", version: "0.1.0" })
 
   const reply = (value: object) => ({
@@ -121,18 +122,21 @@ export function createMcpServer(errands: Errands, places: Places, publicUrl: str
   server.registerTool(
     "find_shops",
     {
-      description: "Find local shops by what they sell, with phone numbers Dial can call.",
+      description:
+        "Find local shops by what they sell, with phone numbers Dial can call. When Channel3 is configured, sold_online lists the same item from online retailers with buy links: offer those first if the user is happy to buy online, and call a shop when only a local shop has it.",
       inputSchema: { query: z.string().describe("What the user wants, for example 'bagels'"), near: z.string().optional() },
-      outputSchema: { shops: z.array(shopOutput) },
+      outputSchema: { shops: z.array(shopOutput), sold_online: z.array(z.looseObject({ title: z.string(), url: z.string(), domain: z.string() })), online_source: z.string() },
       annotations: { readOnlyHint: true, openWorldHint: true },
     },
     async ({ query, near }) => {
-      const shops = await places.search(query, near)
+      const [shops, online] = await Promise.all([places.search(query, near), products.search(query).catch(() => [])])
       return reply({
         shops: shops.map((shop) => {
           const card = cardView(errands.card(shop.phone))
           return { ...shop, agent_ready: Boolean(card?.payee_email), ...(card && { card }) }
         }),
+        sold_online: online,
+        online_source: products.source,
       })
     },
   )

@@ -27,6 +27,12 @@ services:
         sync: false
       - key: PAYPAL_PARTNER_ID
         sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: CHANNEL3_API_KEY
+        sync: false
+      - key: VITE_AG_STUDIO_LICENSE_KEY
+        sync: false
       - key: OPENAI_API_KEY
         sync: false
       - key: TWILIO_ACCOUNT_SID

@@ -1,38 +1,26 @@
 import type { CallHandlers, CallSession, PlaceCall } from "./call.ts"
+import { openaiChat, type Complete, type Message, type Tool, type ToolCall } from "./models.ts"
 
 const IDLE_MS = 5 * 60_000
 const MAX_LLM_TURNS = 40
 
-type ToolCall = { id: string; type: "function"; function: { name: string; arguments: string } }
-type Message = { role: string; content?: string | null; tool_calls?: ToolCall[]; tool_call_id?: string }
-type TextConfig = { openaiApiKey: string; model: string; baseUrl?: string }
+type TextConfig = { complete: Complete } | { openaiApiKey: string; model: string; baseUrl?: string }
 
 const messageOf = (error: unknown) => (error instanceof Error ? error.message : String(error))
 
-export function textCalls({ openaiApiKey, model, baseUrl = "https://api.openai.com/v1" }: TextConfig): {
+export function textCalls(config: TextConfig): {
   placeCall: PlaceCall
   shopSays(errandId: string, text: string): void
 } {
   const shops = new Map<string, (text: string) => void>()
-
-  async function complete(messages: Message[], tools?: unknown[]): Promise<Message> {
-    const response = await fetch(`${baseUrl}/chat/completions`, {
-      method: "POST",
-      headers: { "content-type": "application/json", authorization: `Bearer ${openaiApiKey}` },
-      body: JSON.stringify({ model, messages, ...(tools ? { tools } : {}) }),
-    })
-    if (!response.ok) throw new Error(`Model request failed (${response.status}): ${await response.text()}`)
-    const { choices } = (await response.json()) as { choices: { message: Message }[] }
-    const { content, tool_calls } = choices[0]!.message
-    return { role: "assistant", content: content ?? null, ...(tool_calls?.length ? { tool_calls } : {}) }
-  }
+  const complete = "complete" in config ? config.complete : openaiChat({ apiKey: config.openaiApiKey, model: config.model, baseUrl: config.baseUrl })
 
   const placeCall: PlaceCall = async ({ errandId, input }, brief, handlers: CallHandlers): Promise<CallSession> => {
     const { name, phone } = input.shop
     const persona = phone.startsWith("llm:") ? phone.slice(4) : undefined
     if (phone !== "browser" && persona === undefined) throw new Error(`Unknown text shop "${phone}"`)
 
-    const tools = brief.tools.map((tool) => ({ type: "function", function: tool }))
+    const tools: Tool[] = brief.tools.map((tool) => ({ type: "function", function: tool }))
     const agent: Message[] = [{ role: "system", content: brief.instructions }]
     const shop: Message[] | undefined =
       persona === undefined

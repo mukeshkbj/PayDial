@@ -130,7 +130,7 @@ export function createApp({ errands, paypal, places, publicUrl, fakePayPal, shop
   })
 
   app.post("/api/errands/:id/shop", async (c) => {
-    if (!shopSays) return c.json({ error: "Be-the-shop needs OPENAI_API_KEY on the server." }, 501)
+    if (!shopSays) return c.json({ error: "Be-the-shop needs ANTHROPIC_API_KEY or OPENAI_API_KEY on the server." }, 501)
     const { text } = z.object({ text: z.string().min(1) }).parse(await c.req.json())
     shopSays(c.req.param("id"), text)
     return c.json({ ok: true })

@@ -4,6 +4,7 @@ import { serveStatic } from "@hono/node-server/serve-static"
 import { createNodeWebSocket } from "@hono/node-ws"
 import type { PlaceCall } from "./call/call.ts"
 import { scriptedCalls } from "./call/scripted.ts"
+import { anthropicChat, openaiChat } from "./call/models.ts"
 import { textCalls } from "./call/text.ts"
 import { twilioRealtimeCalls } from "./call/twilio-realtime.ts"
 import { sqliteCards } from "./cards.ts"
@@ -34,7 +35,12 @@ function choosePayPal() {
 const { paypal, fake } = choosePayPal()
 
 const scripted = scriptedCalls(Number(env.DIAL_SIM_STEP_MS ?? 1_200), env.DIAL_SIM_PAYEE)
-const text = openaiApiKey ? textCalls({ openaiApiKey, model: textModel }) : undefined
+const textComplete = env.ANTHROPIC_API_KEY
+  ? anthropicChat({ apiKey: env.ANTHROPIC_API_KEY, model: env.ANTHROPIC_MODEL ?? "claude-sonnet-5-5" })
+  : openaiApiKey
+    ? openaiChat({ apiKey: openaiApiKey, model: textModel })
+    : undefined
+const text = textComplete ? textCalls({ complete: textComplete }) : undefined
 const twilio =
   env.TWILIO_ACCOUNT_SID && env.TWILIO_AUTH_TOKEN && env.TWILIO_FROM_NUMBER && openaiApiKey
     ? twilioRealtimeCalls({
@@ -57,7 +63,7 @@ const placeCall: PlaceCall = async (target, brief, handlers) => {
   const phone = target.input.shop.phone
   if (phone.startsWith("sim:")) return scripted(target, brief, handlers)
   if (phone === "browser" || phone.startsWith("llm:")) {
-    if (!text) return refuse("Text calls need OPENAI_API_KEY.", "This server cannot run a typed shop line yet.")
+    if (!text) return refuse("Text calls need ANTHROPIC_API_KEY or OPENAI_API_KEY.", "This server cannot run a typed shop line yet.")
     return text.placeCall(target, brief, handlers)
   }
   if (!twilio) return refuse("Phone calls need TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM_NUMBER and OPENAI_API_KEY.", "This server cannot place real phone calls yet. Try one of the simulated shops.")

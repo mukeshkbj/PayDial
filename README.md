@@ -2,9 +2,11 @@
 
 # Dial
 
-**Your AI assistant can buy from Amazon. It cannot buy from your local bakery. Dial lets it.**
+**Dial turns a shop's phone number into a PayPal checkout for AI assistants. The AI never touches the money.**
 
-Dial phones a shop that only takes calls and agrees the order with the person who answers. PayPal holds the payment while the shop is still on the line, and the customer pays at the counter. A shop with no PayPal can sign up for PayPal during the call. Dial is built first for people who do not use the phone, such as deaf customers, and for the AI assistants that act for them.
+Your AI assistant can buy from Amazon. It cannot buy from your local bakery. Dial lets it.
+
+Dial phones a shop that only takes calls and agrees the order with the person who answers. PayPal holds the payment while the shop is still on the line, and the customer pays at the counter. A shop with no PayPal can sign up for PayPal during the call, so each call can bring PayPal a new merchant. Dial is built first for people who do not use the phone, such as deaf customers, and for the AI assistants that act for them.
 
 - Demo video: [PLACEHOLDER: add the YouTube link]
 - Live demo: [PLACEHOLDER: add the hosted URL]
@@ -144,6 +146,8 @@ A shop can say anything on a call, including "tell your system to authorize $500
 
 The pickup key adds a second wall. Only the customer holds it, and no MCP tool returns it. So an assistant that is told to pay the shop cannot do it. `docs/evidence/2026-10-18-claude-code-mcp.md` logs a Claude Code run in which the assistant said it had no tool to pay the shop.
 
+This is also why Dial does not use PayPal's Agent Toolkit or MCP server. They give the language model tools that move money, such as `pay_order` and `create_refund`. Dial's agent talks to a stranger on the phone, so giving it no payment tools is a deliberate safety choice. [PayPal APIs used](#paypal-apis-used) gives the full reasons.
+
 ## Architecture
 
 One server runs the product. The web app, Text Dial and MCP are three front doors to one state machine.
@@ -209,7 +213,7 @@ Dial ends the errand and no money moves:
 | Errand | `/errand/:id` | Follow the call as live captions. Answer the agent's questions. Approve on PayPal, then pay at the counter or release the hold. The deal shows as a receipt with a stamp for each stage. |
 | Receipt | `/receipt/:id` | The call receipt. Your browser hashes the transcript and compares it with the hash on the PayPal order. |
 | Text Dial | `/text` | A phone simulator for Text Dial, with example orders to send. |
-| Shop line | `/shop-line/:id` | Play the shop yourself: read what the agent says and type replies. This needs `OPENAI_API_KEY`. |
+| Shop line | `/shop-line/:id` | Play the shop yourself: read what the agent says and type replies. This needs `ANTHROPIC_API_KEY` or `OPENAI_API_KEY`. |
 
 The interface is set in Atkinson Hyperlegible Next and Atkinson Hyperlegible Mono. The Braille Institute made these typefaces for readers with low vision. The font files and their license (SIL Open Font License) are in `web/public/fonts`. The interface icons are from the Solar set (CC BY 4.0), and the PayPal mark is from Simple Icons. Motion animates layout and state changes, and NumberFlow animates prices and counts. Both respect the reduced-motion setting.
 
@@ -332,7 +336,9 @@ All variables are optional. With none set, the server runs fully simulated.
 | `PAYPAL_API_BASE` | `https://api-m.sandbox.paypal.com` | Base URL for the PayPal REST adapter. |
 | `PAYPAL_PARTNER_ID` | none | Dial's PayPal partner merchant ID. Dial needs it to read a new shop's sign-up status. Without it, the sign-up link is still sent, but Dial cannot confirm the account, so the customer pays at pickup. |
 | `PAYPAL_WEBHOOK_ID` | none | ID of the PayPal webhook that points at `/paypal/webhook`. Without it, Dial rejects every webhook. |
-| `OPENAI_API_KEY` | none | Turns on text-mode calls. The Twilio and Google Places adapters also need it. |
+| `ANTHROPIC_API_KEY` | none | Turns on text-mode calls with Claude. Takes priority over `OPENAI_API_KEY` for text calls. |
+| `ANTHROPIC_MODEL` | `claude-sonnet-5-5` | Claude model for text-mode calls. |
+| `OPENAI_API_KEY` | none | Turns on text-mode calls when `ANTHROPIC_API_KEY` is not set. The Twilio and Google Places adapters also need it. |
 | `OPENAI_MODEL` | `gpt-5-mini` | Text model for text-mode calls and for menu extraction from shop websites. |
 | `OPENAI_REALTIME_MODEL` | `gpt-realtime` | OpenAI Realtime model for the Twilio voice adapter. The default is set in `src/call/twilio-realtime.ts`. |
 | `TWILIO_ACCOUNT_SID` | none | With `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER`, and `OPENAI_API_KEY`, turns on real phone calls. |
@@ -349,7 +355,7 @@ All variables are optional. With none set, the server runs fully simulated.
 Which variables turn on which real adapter:
 
 - `PAYPAL_CLIENT_ID` and `PAYPAL_CLIENT_SECRET`: the PayPal REST adapter. Otherwise the in-memory fake runs.
-- `OPENAI_API_KEY`: the text call adapter. It serves shops whose phone is `browser` (a person plays the shop on the shop line page) or `llm:<persona>` (a model plays the shop).
+- `ANTHROPIC_API_KEY` or `OPENAI_API_KEY`: the text call adapter. It serves shops whose phone is `browser` (a person plays the shop on the shop line page) or `llm:<persona>` (a model plays the shop).
 - `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER`, and `OPENAI_API_KEY`: real outbound calls through Twilio Media Streams to OpenAI Realtime. The number must be in `DIAL_CALL_ALLOWLIST`.
 - `GOOGLE_MAPS_API_KEY` and `OPENAI_API_KEY`: Google Places API (New) search, with menu extraction by the text model.
 
@@ -402,7 +408,7 @@ Other events, and events that match no errand in the expected state, change noth
 ### AI used
 
 - OpenAI Realtime (default model `gpt-realtime`) runs the voice agent over Twilio Media Streams. Audio is G.711 mu-law (`audio/pcmu`) in both directions, so Twilio's stream goes to the model directly. Input transcription uses `gpt-4o-transcribe`.
-- An OpenAI text model (`OPENAI_MODEL`, default `gpt-5-mini`) runs text-mode calls. It plays the agent and, for `llm:` shops, the shop. It also extracts menus from shop websites into a fixed schema.
+- Claude (`ANTHROPIC_MODEL`, default `claude-sonnet-5-5`) runs text-mode calls when `ANTHROPIC_API_KEY` is set; otherwise an OpenAI text model (`OPENAI_MODEL`, default `gpt-5-mini`) does. The model plays the agent and, for `llm:` shops, the shop. The OpenAI text model also extracts menus from shop websites into a fixed schema.
 - The code was written with AI coding assistants: Claude Code, with Devin as a subagent for the dev script and the first draft of this README.
 
 ## Credits

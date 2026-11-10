@@ -1,10 +1,10 @@
 import { AgStudioAiModule, AgStudioLicenseManager, AgStudioModuleRegistry, createAiHarness, directLlmRunner, type AgAiHarnessSetupParams, type AgReportState, type AgStudioApi } from "ag-studio"
 import { AgStudio } from "ag-studio-react"
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useState, type FormEvent } from "react"
 import type { LedgerRow } from "../../src/ledger.ts"
+import { navigate } from "./api.ts"
 import { HoldTimeline } from "./HoldTimeline.tsx"
 import { ledgerAdapter, verifyReceipt } from "./ledgerAgent.ts"
-import { Missing } from "./Missing.tsx"
 
 const licence = (import.meta as { env?: Record<string, string | undefined> }).env?.VITE_AG_STUDIO_LICENSE_KEY
 if (licence) AgStudioLicenseManager.setLicenseKey(licence)
@@ -89,8 +89,54 @@ const initialState = {
   ],
 } as unknown as AgReportState
 
+const KEY = "dial-ledger-key"
+const remembered = () => {
+  try {
+    return localStorage.getItem(KEY) ?? undefined
+  } catch {
+    return undefined
+  }
+}
+const remember = (key: string) => {
+  try {
+    localStorage.setItem(KEY, key)
+  } catch {}
+}
+
+function KeyGate({ wrong }: { wrong: boolean }) {
+  const [key, setKey] = useState("")
+  useEffect(() => {
+    document.title = "Money ledger · Dial"
+  }, [])
+  function open(event: FormEvent) {
+    event.preventDefault()
+    if (key.trim()) navigate(`/ledger/${encodeURIComponent(key.trim())}`)
+  }
+  return (
+    <main className="page missing">
+      <header className="line-head">
+        <p className="kicker">Money ledger</p>
+        <h1>Enter the Dial key</h1>
+        <p className="request">
+          {wrong ? "That key did not open the ledger. Check it and try again." : "On a hosted Dial the ledger is private to its operator. Judges: the key is in the Devpost testing notes."}
+        </p>
+      </header>
+      <form className="ledger-key" onSubmit={open}>
+        <label>
+          <span className="sr-only">Dial key</span>
+          <input value={key} onChange={(event) => setKey(event.target.value)} placeholder="Dial key" autoComplete="off" spellCheck={false} />
+        </label>
+        <button className="button ink" disabled={!key.trim()}>
+          Open the ledger
+        </button>
+      </form>
+    </main>
+  )
+}
+
 export function LedgerPage({ dialKey }: { dialKey?: string }) {
-  const suffix = dialKey ? `/${encodeURIComponent(dialKey)}` : ""
+  const key = dialKey ?? remembered()
+  const suffix = key ? `/${encodeURIComponent(key)}` : ""
   const [ledger, setLedger] = useState<{ rows: LedgerRow[]; agent: boolean } | null>()
   const [version, setVersion] = useState(0)
 
@@ -98,7 +144,10 @@ export function LedgerPage({ dialKey }: { dialKey?: string }) {
     document.title = "Money ledger · Dial"
     fetch(`/api/ledger${suffix}`)
       .then((res) => (res.ok ? res.json() : null))
-      .then(setLedger, () => setLedger(null))
+      .then((body) => {
+        if (body && key) remember(key)
+        setLedger(body)
+      }, () => setLedger(null))
   }, [suffix, version])
 
   const ai = useMemo(() => {
@@ -129,7 +178,7 @@ export function LedgerPage({ dialKey }: { dialKey?: string }) {
       }))
   }, [ledger?.agent, suffix])
 
-  if (ledger === null) return <Missing title="No ledger here" detail="This server needs its Dial key in the address to show the ledger." />
+  if (ledger === null) return <KeyGate wrong={Boolean(dialKey)} />
   if (!ledger) return <p className="ledger-wait">Reading the ledger…</p>
 
   return (

@@ -4,6 +4,8 @@ export type LedgerRow = {
   errand: string
   created: string
   day: string
+  ended: string
+  collectBy: string | null
   shop: string
   customer: string
   outcome: string
@@ -66,6 +68,8 @@ export function ledgerRows(errands: Errand[]): LedgerRow[] {
         errand: errand.id,
         created: errand.createdAt,
         day: errand.createdAt.slice(0, 10),
+        ended: errand.transcript.at(-1)?.at ?? errand.createdAt,
+        collectBy: state.kind === "authorized" ? state.collectBy : null,
         shop: input.shop.name,
         customer: input.customerName,
         outcome: blocked ? "Blocked by the money gate" : OUTCOME[state.kind],

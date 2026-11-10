@@ -60,6 +60,7 @@ test("authorize, capture and void post to the documented paths, each with its ow
 
   assert.deepEqual(await paypal.authorize("ORDER-1"), { authorizationId: "AUTH-9" })
   assert.deepEqual(await paypal.capture("AUTH-9"), { captureId: "CAPTURE-3", pending: false })
+  await paypal.capture("AUTH-9", 3)
   await paypal.void("AUTH-9")
 
   const posts = calls.filter((call) => call.method === "POST" && !call.url.endsWith("/token"))
@@ -68,6 +69,7 @@ test("authorize, capture and void post to the documented paths, each with its ow
     [
       ["https://pp.test/v2/checkout/orders/ORDER-1/authorize", "ORDER-1-authorize", {}],
       ["https://pp.test/v2/payments/authorizations/AUTH-9/capture", "AUTH-9-capture", { final_capture: true }],
+      ["https://pp.test/v2/payments/authorizations/AUTH-9/capture", "AUTH-9-capture-3", { final_capture: true }],
       ["https://pp.test/v2/payments/authorizations/AUTH-9/void", "AUTH-9-void", {}],
     ],
   )

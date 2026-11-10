@@ -29,8 +29,18 @@ test("Channel3 search sends the key and maps each product to its first buyable o
   const online = await channel3({ apiKey: "c3" }).search("concha", 2)
   assert.equal(calls[0]!.url, "https://api.trychannel3.com/v1/search")
   assert.equal(calls[0]!.headers["x-api-key"], "c3")
-  assert.deepEqual(calls[0]!.body, { query: "concha", limit: 2 })
+  assert.deepEqual(calls[0]!.body, { query: "concha", limit: 8 })
   assert.deepEqual(online, [{ title: "Plain concha, 6 pack", price: 12.5, currency: "USD", url: "https://shop.example/concha", domain: "shop.example", availability: "InStock", image: "https://img/a.jpg" }])
+})
+
+test("a product whose title does not name every word of the query is left out", async (t) => {
+  fakeChannel3(t, {
+    products: [
+      { title: "Toddler Everything Bagels T-Shirt", offers: [{ url: "https://gap.example/t", domain: "gap.example" }] },
+      { title: "Sesame Bagel, dozen", offers: [{ url: "https://bakery.example/b", domain: "bakery.example" }] },
+    ],
+  })
+  assert.deepEqual((await channel3({ apiKey: "c3" }).search("sesame bagels")).map((item) => item.title), ["Sesame Bagel, dozen"])
 })
 
 test("an empty query asks nothing, a failed request throws, and no key means no online results", async (t) => {

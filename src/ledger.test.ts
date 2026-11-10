@@ -34,6 +34,8 @@ test("ledger rows put the money where PayPal has it: held, captured or voided", 
   assert.deepEqual([voided!.released, voided!.held, voided!.outcome], [5.44, 0, "Hold released"])
   assert.equal(held!.receiptOnOrder, "in custom_id")
   assert.equal(held!.limit, 7)
+  assert.equal(held!.collectBy, "2026-11-10T10:00:00.000Z")
+  assert.equal(paid!.collectBy, null)
 })
 
 test("a deal the money gate refused shows as blocked, with the price the shop asked for", () => {
@@ -47,6 +49,7 @@ test("a deal the money gate refused shows as blocked, with the price the shop as
   assert.equal(row!.gateBlocks, 1)
   assert.equal(row!.money, "none")
   assert.equal(row!.receiptOnOrder, "no PayPal order")
+  assert.equal(row!.ended, "2026-11-09T10:00:01.000Z")
 })
 
 test("the ledger endpoint lists errands, needs the Dial key when keys are set, and has no agent without a model", async () => {

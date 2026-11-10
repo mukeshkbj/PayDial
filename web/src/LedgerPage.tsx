@@ -2,6 +2,7 @@ import { AgStudioAiModule, AgStudioLicenseManager, AgStudioModuleRegistry, creat
 import { AgStudio } from "ag-studio-react"
 import { useEffect, useMemo, useState } from "react"
 import type { LedgerRow } from "../../src/ledger.ts"
+import { HoldTimeline } from "./HoldTimeline.tsx"
 import { ledgerAdapter, verifyReceipt } from "./ledgerAgent.ts"
 import { Missing } from "./Missing.tsx"
 
@@ -147,6 +148,7 @@ export function LedgerPage({ dialKey }: { dialKey?: string }) {
       <div className="ledger-studio">
         <AgStudio key={version} data={{ sources: [{ id: "ledger", name: "Money ledger", data: ledger.rows, fields }] }} initialState={initialState} mode="edit" ai={ai} panels={{ edit: { left: ai ? ["ai"] : [], right: ["edit", "data"] } }} />
       </div>
+      <HoldTimeline key={`timeline-${version}`} rows={ledger.rows} />
       {!ledger.agent && <p className="ledger-note">The Ledger agent needs ANTHROPIC_API_KEY on the server.</p>}
     </section>
   )

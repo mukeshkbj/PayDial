@@ -1183,3 +1183,34 @@ test("the PayPal order for a shop that signed up names the merchant PayPal confi
   assert.equal(paypal.peek(awaiting.state.orderId)!.payeeMerchantId, `FAKE-MERCHANT-${id.slice(0, 8)}`)
   assert.ok(errands.signedUp(id))
 })
+
+test("each retry of a refused collection sends a new PayPal-Request-Id, so PayPal does not replay the refusal", async () => {
+  const paypal = fakePayPal(PUBLIC_URL)
+  const attempts: (number | undefined)[] = []
+  const flaky = {
+    ...paypal,
+    capture: (id: string, attempt?: number) => (attempts.push(attempt), attempts.length < 3 ? Promise.reject(new Error("PayPal 422 UNPROCESSABLE_ENTITY")) : paypal.capture(id, attempt)),
+  }
+  const { errands, held } = collecting(20, paypal, sqliteErrands(":memory:"), flaky)
+  const { id } = await held()
+  await until(errands, id, inState("paid"))
+  assert.deepEqual(attempts, [1, 2, 3])
+})
+
+test("a retry first reads the order back, and records a capture that already went through instead of capturing twice", async () => {
+  const paypal = fakePayPal(PUBLIC_URL)
+  let captures = 0
+  const lostReply = {
+    ...paypal,
+    capture: async (id: string, attempt?: number) => {
+      captures++
+      await paypal.capture(id, attempt)
+      throw new Error("socket hang up")
+    },
+  }
+  const { errands, held } = collecting(20, paypal, sqliteErrands(":memory:"), lostReply)
+  const { id, orderId } = await held()
+  const paid = await until(errands, id, inState("paid"))
+  assert.equal(captures, 1)
+  assert.equal(paid.state.kind === "paid" && paid.state.captureId, paypal.peek(orderId)!.authorization!.captureId)
+})

@@ -363,7 +363,7 @@ function OnlineStrip({ query, online }: { query: string; online: Online[] }) {
     )
   return (
     <aside className="online" aria-label={`Sold online: ${query}`}>
-      <p className="online-head">Also sold online, found by Channel3. Buy there if you don't need it today; Dial calls a shop when you do.</p>
+      <p className="online-head">Channel3 found these online for “{query}”. Check they are what you want; when they are not, or you need it today, Dial calls a local shop.</p>
       <ul>
         {online.map((item) => (
           <li key={item.url}>

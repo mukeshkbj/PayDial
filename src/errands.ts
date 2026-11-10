@@ -215,10 +215,14 @@ export function createErrands({
     calls.get(errand.id)?.inform("The customer did not approve the payment in time. Apologize, tell the shop the customer will call back, say goodbye, and call end_call.")
   }
 
-  async function collect(errand: Errand, unclaimed: boolean) {
+  async function collect(errand: Errand, unclaimed: boolean, attempt = 1) {
     if (errand.state.kind !== "authorized") throw new Error(`Errand ${errand.id} has no authorized payment`)
     const { deal, orderId, authorizationId, receipt } = errand.state
-    const { captureId, pending } = await paypal.capture(authorizationId)
+    const earlier = attempt > 1 ? await paypal.order(orderId) : undefined
+    const { captureId, pending } =
+      earlier?.captureId && earlier.captureStatus !== "DECLINED" && earlier.captureStatus !== "FAILED"
+        ? { captureId: earlier.captureId, pending: earlier.captureStatus !== "COMPLETED" }
+        : await paypal.capture(authorizationId, attempt)
     setState(errand, { kind: "paid", deal, orderId, captureId, receipt, ...(pending && { pending }), ...(unclaimed && { unclaimed }) })
     followPending(errand)
   }
@@ -238,7 +242,7 @@ export function createErrands({
     if (errand.state.kind !== "authorized") return
     const due = (tries: number) => {
       if (errand.state.kind !== "authorized") return
-      once(errand.id, "capturing", () => collect(errand, true)).catch((error) => {
+      once(errand.id, "capturing", () => collect(errand, true, tries)).catch((error) => {
         console.error(`Unclaimed hold for errand ${errand.id} not collected: ${error}`)
         if (errand.state.kind !== "authorized") return
         if (tries === COLLECT_TRIES) return addLine(errand, "system", "Dial stopped trying to collect the hold. PayPal releases it when it expires, and you are not charged.")

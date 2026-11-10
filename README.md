@@ -17,7 +17,7 @@ Dial phones a shop that only takes calls and agrees the order with the person wh
 
 **The AI never touches the money.** Plain code checks every price (the money gate), the call receipt's hash goes into the PayPal order, and no tool given to any model can capture, void, refund or pay. [Evidence](docs/evidence/2026-11-09-paypal-sandbox-probe.md): on the PayPal sandbox, Dial held money for a separate shop account, then captured one hold and voided another.
 
-**Partners used:** AG Grid (AG Studio money ledger, with a Studio Agent Framework agent on Claude that reads the money but cannot move it), Channel3 (checks whether the item is sold online before Dial calls), Postman (a [collection](postman/dial.postman_collection.json) whose tests prove no AI-facing call moves money; [36 of 36 passed](postman/newman-run.txt)), Render (`render.yaml` with a persistent disk), and Claude (the shop line and the ledger agent).
+**Partners used:** AG Grid (AG Studio money ledger, with a Studio Agent Framework agent on Claude that reads the money but cannot move it), Bryntum (a Scheduler of calls and PayPal holds over time on the ledger page), Channel3 (checks whether the item is sold online before Dial calls), APIMatic (its PayPal Context Plugin reviewed the PayPal adapter and led to a [capture-retry fix](docs/evidence/2026-11-10-apimatic-context-plugin.md)), Postman (a [collection](postman/dial.postman_collection.json) whose tests prove no AI-facing call moves money; [36 of 36 passed](postman/newman-run.txt)), Render (`render.yaml` with a persistent disk), and Claude (the shop line and the ledger agent).
 
 **PayPal APIs:** Orders v2 (`intent: AUTHORIZE`, the shop as `payee`, the call receipt hash in `custom_id`), Payments v2 (capture and void of the hold), Webhooks (signature check), and Partner Referrals (a shop signs up during the call).
 
@@ -232,6 +232,8 @@ The interface is set in Atkinson Hyperlegible Next and Atkinson Hyperlegible Mon
 
 The AI Assistant panel runs the **Ledger agent** on AG's Studio Agent Framework (`createAiHarness`, `directLlmRunner`). It is the primary agent, delegates to AG's own widget, page and data agents to build charts, and has one tool of Dial's own, `verify_receipt`, which hashes a transcript in the browser and compares it with the hash on the PayPal order. Every agent runs on Claude through `POST /api/ledger-turn/<key>`: `src/ledgerAgent.ts` turns a Studio turn into one Anthropic Messages request and Claude's reply back into Studio output items, and adds the rule that no tool moves money. The agent can read and chart the money. It cannot capture, void, refund or pay, because no such tool exists. Set `VITE_AG_STUDIO_LICENSE_KEY` at build time to remove the trial watermark.
 
+Below the dashboard, a read-only **Bryntum Scheduler** (`web/src/HoldTimeline.tsx`) shows the latest day of calls, one row per shop. Each bar runs from a call's first word to its last event and is coloured by where the money went; a dashed orange bar is a hold PayPal still keeps, up to the collect-by time when Dial captures it for the shop. It runs as the Bryntum trial.
+
 ### Sold online (Channel3)
 
 With `CHANNEL3_API_KEY`, a search also asks Channel3's product search (`POST /v1/search`) whether the item is sold online. The home page shows the buy links, or says that only a local shop has it, so Dial calls. `find_shops` returns the same results as `sold_online`, so an assistant can offer an online purchase first and call a shop only when it must. A failed Channel3 search never hides the local shops.
@@ -302,7 +304,7 @@ npm run typecheck
 npm run build
 ```
 
-On 2026-11-09, `npm test` ran 219 tests and 219 passed. The tests use `node:test` and run against fakes of PayPal, Twilio, OpenAI and Google. They cover the money gate, every simulated script, the MCP loop, Text Dial, the PayPal REST adapter, webhook checks, restart recovery, and the races around one payment. The PayPal REST adapter has also run against the PayPal sandbox, and the ledger agent's Claude bridge against Anthropic's API; the other real adapters have not run against live services (see the limits below).
+On 2026-11-10, `npm test` ran 222 tests and 222 passed. The tests use `node:test` and run against fakes of PayPal, Twilio, OpenAI and Google. They cover the money gate, every simulated script, the MCP loop, Text Dial, the PayPal REST adapter, webhook checks, restart recovery, and the races around one payment. The PayPal REST adapter has also run against the PayPal sandbox, and the ledger agent's Claude bridge against Anthropic's API; the other real adapters have not run against live services (see the limits below).
 
 More evidence is in `docs/evidence/`: a Claude Code run over MCP, and an accessibility check with contrast on 12 pages in both themes and a keyboard-only errand.
 

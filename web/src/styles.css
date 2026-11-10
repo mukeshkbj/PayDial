@@ -3294,3 +3294,22 @@ code {
 .online small {
   color: var(--ink-3);
 }
+
+.timeline {
+  display: grid;
+  gap: 0.5rem;
+}
+.timeline h2 {
+  margin: 0;
+}
+.timeline p {
+  margin: 0;
+  max-width: 72ch;
+  color: var(--ink-2);
+}
+.timeline-host {
+  height: 420px;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid color-mix(in oklch, var(--ink) 14%, transparent);
+}

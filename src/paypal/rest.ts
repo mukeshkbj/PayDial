@@ -15,7 +15,7 @@ export type OrderRequest = {
 export type PayPal = {
   createOrder(order: OrderRequest): Promise<{ orderId: string; approveUrl: string }>
   authorize(orderId: string): Promise<{ authorizationId: string }>
-  capture(authorizationId: string): Promise<{ captureId: string; pending: boolean }>
+  capture(authorizationId: string, attempt?: number): Promise<{ captureId: string; pending: boolean }>
   void(authorizationId: string): Promise<void>
   order(orderId: string): Promise<PayPalOrder>
   verifyWebhook(headers: Record<string, string>, event: unknown): Promise<boolean>
@@ -134,8 +134,9 @@ export function restPayPal({ clientId, clientSecret, baseUrl, webhookId, partner
       return { authorizationId: authorization.id }
     },
 
-    async capture(authorizationId) {
-      const body = await post(`/v2/payments/authorizations/${authorizationId}/capture`, `${authorizationId}-capture`, {
+    async capture(authorizationId, attempt = 1) {
+      const requestId = attempt > 1 ? `${authorizationId}-capture-${attempt}` : `${authorizationId}-capture`
+      const body = await post(`/v2/payments/authorizations/${authorizationId}/capture`, requestId, {
         final_capture: true,
       })
       if (body.status !== "COMPLETED" && body.status !== "PENDING") throw new Error(`PayPal answered the capture with status ${body.status}`)

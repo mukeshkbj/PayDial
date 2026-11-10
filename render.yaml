@@ -2,19 +2,13 @@ services:
   - type: web
     name: dial
     runtime: node
-    plan: starter
+    plan: free
     buildCommand: npm ci && npm run build
     startCommand: npm start
     healthCheckPath: /api/config
-    disk:
-      name: dial-data
-      mountPath: /var/data
-      sizeGB: 1
     envVars:
       - key: NODE_VERSION
         value: "24"
-      - key: DIAL_DB
-        value: /var/data/dial.db
       - key: PUBLIC_URL
         sync: false
       - key: DIAL_MCP_KEYS

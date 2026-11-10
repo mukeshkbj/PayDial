@@ -1,7 +1,9 @@
 import { AnimatePresence, motion } from "motion/react"
 import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from "react"
 import type { Online } from "../../src/products/channel3.ts"
+import type { Scoreboard } from "../../src/scoreboard.ts"
 import { api, navigate, type Listed } from "./api.ts"
+import { ScoreLine } from "./ChallengePage.tsx"
 import { Icon } from "./Icon.tsx"
 import { PREVIEWS } from "./Previews.tsx"
 import { SCENARIOS, morph, shopHue } from "./shops.ts"
@@ -87,6 +89,9 @@ export function HomePage() {
           </form>
           <a className="link hero-text" href="/text" onClick={(event) => (event.preventDefault(), navigate("/text"))}>
             No app? Order by text message <Icon name="next" />
+          </a>
+          <a className="link hero-text" href="/challenge" onClick={(event) => (event.preventDefault(), navigate("/challenge"))}>
+            Run a shop? Try to get the AI to overpay you <Icon name="next" />
           </a>
         </div>
         <Stage />
@@ -181,6 +186,10 @@ function Stage() {
 }
 
 function Gate() {
+  const [board, setBoard] = useState<Scoreboard>()
+  useEffect(() => {
+    api.scoreboard().then(setBoard, () => undefined)
+  }, [])
   return (
     <section className="gate" aria-labelledby="gate-title">
       <div className="gate-copy">
@@ -191,6 +200,10 @@ function Gate() {
           The agent talks. Ordinary code decides whether money moves. A shop that asks for more than your limit, or tells the AI to approve it,
           gets a no.
         </p>
+        <a className="button ink" href="/challenge" onClick={(event) => (event.preventDefault(), navigate("/challenge"))}>
+          Try to get past it
+        </a>
+        {board && <ScoreLine board={board} />}
       </div>
       <div className="gate-call" aria-hidden>
         <div className="stage-head">

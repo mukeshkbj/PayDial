@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client"
 import { flushSync } from "react-dom"
 import { MotionConfig } from "motion/react"
 import { api, navigate } from "./api.ts"
+import { ChallengePage, ChallengeStart } from "./ChallengePage.tsx"
 import { ErrandPage } from "./ErrandPage.tsx"
 import { HomePage } from "./HomePage.tsx"
 import { Missing } from "./Missing.tsx"
@@ -22,6 +23,7 @@ function route(path: string) {
   if (page === "receipt" && id) return <ReceiptPage id={id} />
   if (page === "shop-line" && id) return <ShopLinePage id={id} />
   if (page === "text") return <TextPage />
+  if (page === "challenge") return id ? <ChallengePage id={id} /> : <ChallengeStart />
   if (page === "ledger")
     return (
       <Suspense fallback={<p className="ledger-wait">Opening the ledger…</p>}>

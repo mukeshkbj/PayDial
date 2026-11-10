@@ -7,7 +7,7 @@ export type Shop = {
 }
 
 export type ErrandInput =
-  | { mode: "order"; shop: Shop; request: string; maxCents: Cents; customerName: string }
+  | { mode: "order"; shop: Shop; request: string; maxCents: Cents; customerName: string; gullible?: boolean }
   | { mode: "inquire"; shop: Shop; request: string; customerName: string }
 
 export type DealItem = { name: string; quantity: number }

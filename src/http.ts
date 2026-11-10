@@ -5,6 +5,7 @@ import { z } from "zod"
 import { formatUsd, isFinished } from "./domain/errand.ts"
 import type { Errands } from "./errands.ts"
 import { ledgerRows } from "./ledger.ts"
+import { scoreboard } from "./scoreboard.ts"
 import type { StudioTurn } from "./ledgerAgent.ts"
 import { createMcpServer } from "./mcp.ts"
 import type { FakePayPal } from "./paypal/fake.ts"
@@ -32,7 +33,7 @@ type Deps = {
 
 const shopInput = z.object({ name: z.string().min(1), phone: z.string().min(1), address: z.string().optional() })
 const errandInput = z.discriminatedUnion("mode", [
-  z.object({ mode: z.literal("order"), shop: shopInput, request: z.string().min(1), maxCents: z.number().int().positive(), customerName: z.string().min(1) }),
+  z.object({ mode: z.literal("order"), shop: shopInput, request: z.string().min(1), maxCents: z.number().int().positive(), customerName: z.string().min(1), gullible: z.boolean().optional() }),
   z.object({ mode: z.literal("inquire"), shop: shopInput, request: z.string().min(1), customerName: z.string().min(1) }),
 ])
 
@@ -225,6 +226,8 @@ export function createApp({ errands, paypal, places, publicUrl, fakePayPal, shop
     })
     app.get("/api/text/:phone", (c) => c.json(sms.thread(c.req.param("phone"))))
   }
+
+  app.get("/api/scoreboard", (c) => c.json(scoreboard(errands.list())))
 
   app.get("/api/online", async (c) => {
     const query = c.req.query("q") ?? ""

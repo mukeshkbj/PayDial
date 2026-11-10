@@ -9,9 +9,9 @@ Your AI assistant can buy from Amazon. It cannot buy from your local bakery. Dia
 Dial phones a shop that only takes calls and agrees the order with the person who answers. PayPal holds the payment while the shop is still on the line, and the customer pays at the counter. A shop with no PayPal can sign up for PayPal during the call, so each call can bring PayPal a new merchant. Dial is built first for people who do not use the phone, such as deaf customers, and for the AI assistants that act for them.
 
 - Demo video: [PLACEHOLDER: add the YouTube link]
-- Live demo: [PLACEHOLDER: add the hosted URL]
+- Live demo: https://dial-xkf9.onrender.com (Render free plan: the first visit after a quiet spell takes up to a minute to wake. The money ledger and the MCP endpoint need the Dial key given in the Devpost testing notes.)
 - Devpost: [PLACEHOLDER: add the Devpost link]
-- Built for the PayPal AI Hackathon. Everything here runs in simulation, with no keys: scripted shops and an in-memory PayPal.
+- Built for the PayPal AI Hackathon. With no keys, everything runs in simulation: scripted shops and an in-memory PayPal. The live demo runs the scripted shops against the real PayPal sandbox.
 
 **Try it in two minutes, with no keys:** run `npm install` and `npm run dev`, open http://localhost:5173, and call Rosa's Panadería. [Run it in four commands](#run-it-in-four-commands) has the details.
 
@@ -81,8 +81,8 @@ The same errand can start from a text message (Text Dial) or from an AI assistan
 Dial needs Node 24 or later. It needs no keys.
 
 ```sh
-git clone [REPOSITORY URL]
-cd [REPOSITORY FOLDER]
+git clone https://github.com/mukeshkbj/PayDial.git
+cd PayDial
 npm install
 npm run dev
 ```

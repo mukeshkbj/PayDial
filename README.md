@@ -125,7 +125,7 @@ npm run build   # builds the web app to web/dist
 npm start       # node src/main.ts serves web/dist on PORT, default 8787
 ```
 
-On Render, `render.yaml` defines the service on the free plan: Node 24 and the build and start commands. The free plan sleeps when idle (the first request wakes it in under a minute) and has no persistent disk, so a redeploy clears errands, holds and Shop Cards. For a durable deploy, switch to a paid plan and add a disk that holds `DIAL_DB`. Render asks for the secrets when the Blueprint is created; set `PUBLIC_URL` to the service URL.
+On Render, `render.yaml` defines the service on the free plan: Node 24 and the build and start commands. The free plan sleeps when idle (the first request wakes it in under a minute) and has no persistent disk, so a redeploy clears errands, holds and Shop Cards. For a durable deploy, switch to a paid plan and add a disk that holds `DIAL_DB`. Render asks for the secrets when the Blueprint is created. `PUBLIC_URL` can stay empty there: Dial then uses `RENDER_EXTERNAL_URL`, which Render sets to the service URL.
 
 With no environment variables, every external service is simulated:
 

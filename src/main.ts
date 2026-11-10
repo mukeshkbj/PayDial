@@ -23,7 +23,7 @@ import { createTexts, sqliteChats } from "./texts.ts"
 
 const env = process.env
 const port = Number(env.PORT ?? 8787)
-const publicUrl = (env.PUBLIC_URL ?? `http://localhost:${port}`).replace(/\/+$/, "")
+const publicUrl = (env.PUBLIC_URL || env.RENDER_EXTERNAL_URL || `http://localhost:${port}`).replace(/\/+$/, "")
 const openaiApiKey = env.OPENAI_API_KEY
 const textModel = env.OPENAI_MODEL ?? "gpt-5-mini"
 

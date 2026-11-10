@@ -3240,8 +3240,8 @@ code {
   cursor: pointer;
 }
 .ledger-studio {
-  height: min(82vh, 900px);
-  min-height: 560px;
+  height: min(92vh, 1080px);
+  min-height: 620px;
   border-radius: 12px;
   overflow: hidden;
   border: 1px solid color-mix(in oklch, var(--ink) 14%, transparent);
@@ -3644,4 +3644,19 @@ code {
   .meter-track {
     height: 17rem;
   }
+}
+
+.ledger-head .ledger-sum {
+  font-size: clamp(1.15rem, 1.6vw, 1.4rem);
+  line-height: 1.4;
+  color: var(--ink);
+  max-width: 54ch;
+}
+.ledger-sum b {
+  font-variant-numeric: tabular-nums;
+}
+.ledger-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
 }

@@ -1,6 +1,7 @@
-import { AgStudioAiModule, AgStudioLicenseManager, AgStudioModuleRegistry, createAiHarness, directLlmRunner, type AgAiHarnessSetupParams, type AgReportState, type AgStudioApi } from "ag-studio"
+import { AgStudioAiModule, AgStudioLicenseManager, AgStudioModuleRegistry, createAiHarness, studioTheme, directLlmRunner, type AgAiHarnessSetupParams, type AgReportState, type AgStudioApi } from "ag-studio"
 import { AgStudio } from "ag-studio-react"
 import { useEffect, useMemo, useState, type FormEvent } from "react"
+import { formatUsd } from "../../src/domain/errand.ts"
 import type { LedgerRow } from "../../src/ledger.ts"
 import { navigate } from "./api.ts"
 import { HoldTimeline } from "./HoldTimeline.tsx"
@@ -41,6 +42,16 @@ const fields = [
   text("receiptOnOrder", "Receipt on PayPal", "Whether the receipt hash is in the PayPal order's custom_id."),
 ]
 
+const theme = studioTheme.withParams({
+  fontFamily: '"Atkinson Hyperlegible Next", system-ui, sans-serif',
+  foregroundColor: "#1b1d24",
+  backgroundColor: "#ffffff",
+  accentColor: "#1b1d24",
+  borderColor: "#dcdee3",
+  borderRadius: 10,
+  studioWrapperBackgroundColor: "#f3f4f6",
+})
+
 const initialState = {
   selectedPageId: "money",
   pages: [
@@ -55,6 +66,11 @@ const initialState = {
           type: "donut-chart",
           format: { title: { text: "Errands by outcome", enabled: true } },
           dataMapping: { categoryKey: [{ id: "ledger.outcome" }], valueKey: [{ id: "ledger.errand", aggregation: "count" }] },
+        },
+        refusals: {
+          type: "column-chart-grouped",
+          format: { title: { text: "Prices the gate refused, by shop", enabled: true } },
+          dataMapping: { categoryKey: [{ id: "ledger.shop" }], valueKey: [{ id: "ledger.gateBlocks", aggregation: "sum" }] },
         },
         ledger: {
           type: "grid",
@@ -82,8 +98,9 @@ const initialState = {
         paid: { xTrack: 6, yTrack: 0, xSpan: 6, ySpan: 8 },
         released: { xTrack: 12, yTrack: 0, xSpan: 6, ySpan: 8 },
         blocked: { xTrack: 18, yTrack: 0, xSpan: 6, ySpan: 8 },
-        outcomes: { xTrack: 0, yTrack: 8, xSpan: 8, ySpan: 30 },
-        ledger: { xTrack: 8, yTrack: 8, xSpan: 16, ySpan: 30 },
+        outcomes: { xTrack: 0, yTrack: 8, xSpan: 9, ySpan: 24 },
+        refusals: { xTrack: 9, yTrack: 8, xSpan: 15, ySpan: 24 },
+        ledger: { xTrack: 0, yTrack: 32, xSpan: 24, ySpan: 30 },
       },
     },
   ],
@@ -139,6 +156,8 @@ export function LedgerPage({ dialKey }: { dialKey?: string }) {
   const suffix = key ? `/${encodeURIComponent(key)}` : ""
   const [ledger, setLedger] = useState<{ rows: LedgerRow[]; agent: boolean } | null>()
   const [version, setVersion] = useState(0)
+  const [agentOpen, setAgentOpen] = useState(false)
+  const [editing, setEditing] = useState(false)
 
   useEffect(() => {
     document.title = "Money ledger · Dial"
@@ -181,24 +200,62 @@ export function LedgerPage({ dialKey }: { dialKey?: string }) {
   if (ledger === null) return <KeyGate wrong={Boolean(dialKey)} />
   if (!ledger) return <p className="ledger-wait">Reading the ledger…</p>
 
+  const sum = (pick: (row: LedgerRow) => number) => Math.round(ledger.rows.reduce((total, row) => total + pick(row), 0) * 100)
+  const held = ledger.rows.filter((row) => row.held > 0)
+  const refused = ledger.rows.reduce((total, row) => total + row.gateBlocks, 0)
+  const studioMode = agentOpen || editing ? "edit" : "view"
+
   return (
-    <section className="ledger" aria-labelledby="ledger-title">
+    <section className="page ledger" aria-labelledby="ledger-title">
       <header className="ledger-head">
         <div>
           <h1 id="ledger-title">Money ledger</h1>
-          <p>
-            Every errand's hold, capture and void, and its call receipt. The Ledger agent can read all of it and build charts. It has no tool that moves money.
+          <p className="ledger-sum">
+            {ledger.rows.length ? (
+              <>
+                {held.length ? (
+                  <>
+                    PayPal holds <b>{formatUsd(sum((row) => row.held))}</b> for {held.length} {held.length === 1 ? "order" : "orders"}.
+                  </>
+                ) : (
+                  "PayPal holds no money right now."
+                )}{" "}
+                Shops have been paid <b>{formatUsd(sum((row) => row.paid))}</b>. The money gate
+                refused <b>{refused}</b> {refused === 1 ? "price" : "prices"}.
+              </>
+            ) : (
+              "No orders yet. Place one from the home page, or try the scam challenge, and it appears here."
+            )}
           </p>
+          <p>Every hold, capture and void, with its call receipt. The ledger agent reads all of it and builds charts. It has no tool that moves money.</p>
         </div>
-        <button type="button" className="ledger-refresh" onClick={() => setVersion((v) => v + 1)}>
-          Refresh
-        </button>
+        <div className="ledger-actions">
+          {ledger.agent && (
+            <button type="button" className={`button ${agentOpen ? "ink" : "outline"}`} aria-pressed={agentOpen} onClick={() => setAgentOpen((open) => !open)}>
+              {agentOpen ? "Close the ledger agent" : "Ask the ledger agent"}
+            </button>
+          )}
+          <button type="button" className={`button ${editing ? "ink" : "outline"}`} aria-pressed={editing} onClick={() => setEditing((on) => !on)}>
+            {editing ? "Done editing" : "Edit dashboard"}
+          </button>
+          <button type="button" className="button outline" onClick={() => setVersion((v) => v + 1)}>
+            Refresh
+          </button>
+        </div>
       </header>
       <div className="ledger-studio">
-        <AgStudio key={version} data={{ sources: [{ id: "ledger", name: "Money ledger", data: ledger.rows, fields }] }} initialState={initialState} mode="edit" ai={ai} panels={{ edit: { left: ai ? ["ai"] : [], right: ["edit", "data"] } }} />
+        <AgStudio
+          key={`${version}-${studioMode}-${agentOpen}-${editing}`}
+          theme={theme}
+          data={{ sources: [{ id: "ledger", name: "Money ledger", data: ledger.rows, fields }] }}
+          initialState={initialState}
+          mode={studioMode}
+          ai={agentOpen ? ai : undefined}
+          panels={{ edit: { left: agentOpen && ai ? ["ai"] : [], right: editing ? ["edit", "data"] : [] }, view: { left: [], right: [] } }}
+        />
       </div>
       <HoldTimeline key={`timeline-${version}`} rows={ledger.rows} />
-      {!ledger.agent && <p className="ledger-note">The Ledger agent needs ANTHROPIC_API_KEY on the server.</p>}
+      {!ledger.agent && <p className="ledger-note">The ledger agent needs ANTHROPIC_API_KEY on the server.</p>}
     </section>
   )
 }

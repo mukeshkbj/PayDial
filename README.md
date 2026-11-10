@@ -17,7 +17,7 @@ Dial phones a shop that only takes calls and agrees the order with the person wh
 
 **The AI never touches the money.** Plain code checks every price (the money gate), the call receipt's hash goes into the PayPal order, and no tool given to any model can capture, void, refund or pay. [Evidence](docs/evidence/2026-11-09-paypal-sandbox-probe.md): on the PayPal sandbox, Dial held money for a separate shop account, then captured one hold and voided another.
 
-**Partners used:** AG Grid (AG Studio money ledger, with a Studio Agent Framework agent on Claude that reads the money but cannot move it), Bryntum (a Scheduler of calls and PayPal holds over time on the ledger page), Channel3 (checks whether the item is sold online before Dial calls), APIMatic (its PayPal Context Plugin reviewed the PayPal adapter and led to a [capture-retry fix](docs/evidence/2026-11-10-apimatic-context-plugin.md)), Postman (a [collection](postman/dial.postman_collection.json) whose tests prove no AI-facing call moves money; [36 of 36 passed](postman/newman-run.txt)), Render (`render.yaml`, free plan), and Claude (the shop line and the ledger agent).
+**Partners used:** AG Grid (AG Studio money ledger, with a Studio Agent Framework agent on Claude that reads the money but cannot move it), Bryntum (a Scheduler of calls and PayPal holds over time on the ledger page), Channel3 (checks whether the item is sold online before Dial calls), APIMatic (its PayPal Context Plugin reviewed the PayPal adapter and led to a [capture-retry fix](docs/evidence/2026-11-10-apimatic-context-plugin.md)), Postman (a [collection](postman/dial.postman_collection.json) whose tests prove no AI-facing call moves money; [36 of 36 passed](postman/newman-run.txt)), Render (`render.yaml`, Starter plan with a persistent disk), and Claude (the shop line and the ledger agent).
 
 **PayPal APIs:** Orders v2 (`intent: AUTHORIZE`, the shop as `payee`, the call receipt hash in `custom_id`), Payments v2 (capture and void of the hold), Webhooks (signature check), and Partner Referrals (a shop signs up during the call).
 
@@ -125,7 +125,7 @@ npm run build   # builds the web app to web/dist
 npm start       # node src/main.ts serves web/dist on PORT, default 8787
 ```
 
-On Render, `render.yaml` defines the service on the free plan: Node 24 and the build and start commands. The free plan sleeps when idle (the first request wakes it in under a minute) and has no persistent disk, so a redeploy clears errands, holds and Shop Cards. For a durable deploy, switch to a paid plan and add a disk that holds `DIAL_DB`. Render asks for the secrets when the Blueprint is created. `PUBLIC_URL` can stay empty there: Dial then uses `RENDER_EXTERNAL_URL`, which Render sets to the service URL.
+On Render, `render.yaml` defines the service on the Starter plan: Node 24, the build and start commands, and a 1 GB persistent disk at `/var/data` that holds `DIAL_DB`, so a redeploy keeps errands, holds and Shop Cards. Render asks for the secrets when the Blueprint is created. `PUBLIC_URL` can stay empty there: Dial then uses `RENDER_EXTERNAL_URL`, which Render sets to the service URL.
 
 With no environment variables, every external service is simulated:
 

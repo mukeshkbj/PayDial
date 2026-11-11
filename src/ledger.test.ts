@@ -80,3 +80,21 @@ test("the ledger and MCP routes take a trailing slash when no Dial key is set", 
   const app = createApp({ errands, places: fixturePlaces(), publicUrl, paypal, fakePayPal: paypal, mcpKeys: [] })
   assert.equal((await app.request("/api/ledger/")).status, 200)
 })
+
+test("the ledger lists PayPal's read-only tools and runs only those, behind the Dial key", async () => {
+  const publicUrl = "http://dial.test"
+  const paypal = fakePayPal(publicUrl)
+  const errands = createErrands({ paypal, placeCall: scriptedCalls(0), cards: sqliteCards(":memory:"), store: sqliteErrands(":memory:"), publicUrl })
+  const asked: unknown[] = []
+  const getOrder = { name: "get_order", description: "Get an order", parameters: { type: "object", properties: { id: { type: "string" } }, required: ["id"] }, run: async (args: unknown) => (asked.push(args), { id: "O1", status: "COMPLETED" }) }
+  const app = createApp({ errands, places: fixturePlaces(), publicUrl, paypal, fakePayPal: paypal, mcpKeys: ["k1"], payPalTools: [getOrder] })
+  const ledger = (await (await app.request("/api/ledger/k1")).json()) as { payPalTools: { name: string }[] }
+  assert.deepEqual(ledger.payPalTools.map((tool) => tool.name), ["get_order"])
+  const run = (body: unknown, key = "k1") => app.request(`/api/ledger-paypal/${key}`, { method: "POST", body: JSON.stringify(body) })
+  assert.equal((await run({ tool: "get_order", args: { id: "O1" } }, "nope")).status, 401)
+  assert.equal((await run({ tool: "create_refund", args: {} })).status, 400)
+  const ok = await run({ tool: "get_order", args: { id: "O1" } })
+  assert.equal(ok.status, 200)
+  assert.deepEqual(await ok.json(), { result: { id: "O1", status: "COMPLETED" } })
+  assert.deepEqual(asked, [{ id: "O1" }])
+})

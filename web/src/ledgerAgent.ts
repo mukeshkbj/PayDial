@@ -90,3 +90,20 @@ export const verifyReceipt: AgAiTool = {
     )
   },
 }
+
+export type PayPalToolSchema = { name: string; description: string; parameters: Record<string, unknown> }
+
+export function payPalTool(schema: PayPalToolSchema, path: string): AgAiTool {
+  return {
+    name: schema.name,
+    description: `${schema.description} From PayPal's Agent Toolkit, read-only.`,
+    kind: "client",
+    schema: () => ({ name: schema.name, description: `${schema.description} From PayPal's Agent Toolkit, read-only.`, parameters: schema.parameters }),
+    async execute(call, ctx) {
+      const res = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ tool: schema.name, args: call.args }), signal: ctx.signal })
+      const body = await res.json()
+      if (!res.ok) return ctx.error(body.error ?? `PayPal ${schema.name} failed.`)
+      return ctx.success(JSON.stringify(body.result).slice(0, 12_000), body.result)
+    },
+  }
+}

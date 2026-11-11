@@ -10,6 +10,7 @@ import type { StudioTurn } from "./ledgerAgent.ts"
 import { createMcpServer } from "./mcp.ts"
 import type { FakePayPal } from "./paypal/fake.ts"
 import type { PayPal } from "./paypal/rest.ts"
+import type { PayPalTool } from "./paypal/toolkit.ts"
 import type { Places } from "./places/places.ts"
 import { noProducts, type Products } from "./products/channel3.ts"
 import type { FakeSms } from "./sms/sms.ts"
@@ -29,6 +30,7 @@ type Deps = {
   twilioAuthToken?: string
   ledgerTurn?: (turn: StudioTurn) => Promise<unknown>
   products?: Products
+  payPalTools?: PayPalTool[]
 }
 
 const shopInput = z.object({ name: z.string().min(1), phone: z.string().min(1), address: z.string().optional() })
@@ -49,7 +51,7 @@ const payPalEvent = z.union([
   z.object({ event_type: z.literal("PAYMENT.CAPTURE.DENIED"), resource: z.object({ id: z.string() }) }).transform(({ resource }) => ({ kind: "denied" as const, captureId: resource.id })),
 ])
 
-export function createApp({ errands, paypal, places, publicUrl, fakePayPal, shopSays, mcpKeys, texts, sms, twilioAuthToken, ledgerTurn, products = noProducts }: Deps) {
+export function createApp({ errands, paypal, places, publicUrl, fakePayPal, shopSays, mcpKeys, texts, sms, twilioAuthToken, ledgerTurn, products = noProducts, payPalTools = [] }: Deps) {
   const app = new Hono({ strict: false })
 
   app.onError((error, c) => {
@@ -239,7 +241,20 @@ export function createApp({ errands, paypal, places, publicUrl, fakePayPal, shop
 
   app.get("/api/ledger/:key?", (c) => {
     if (!ledgerOpen(c.req.param("key"))) return c.json({ error: "Unknown Dial key" }, 401)
-    return c.json({ rows: ledgerRows(errands.list()), agent: Boolean(ledgerTurn), payPal: fakePayPal ? "simulated" : "sandbox" })
+    return c.json({
+      rows: ledgerRows(errands.list()),
+      agent: Boolean(ledgerTurn),
+      payPal: fakePayPal ? "simulated" : "sandbox",
+      payPalTools: payPalTools.map(({ name, description, parameters }) => ({ name, description, parameters })),
+    })
+  })
+
+  app.post("/api/ledger-paypal/:key?", async (c) => {
+    if (!ledgerOpen(c.req.param("key"))) return c.json({ error: "Unknown Dial key" }, 401)
+    const { tool, args } = z.object({ tool: z.string(), args: z.unknown().optional() }).parse(await c.req.json())
+    const found = payPalTools.find((candidate) => candidate.name === tool)
+    if (!found) return c.json({ error: `No read-only PayPal tool named ${tool}. Dial offers ${payPalTools.map((t) => t.name).join(", ") || "none"}.` }, 400)
+    return c.json({ result: await found.run(args ?? {}) })
   })
 
   app.post("/api/ledger-turn/:key?", async (c) => {

@@ -12,6 +12,7 @@ import { sqliteErrands } from "./errandStore.ts"
 import { createErrands } from "./errands.ts"
 import { ledgerAgent } from "./ledgerAgent.ts"
 import { channel3 } from "./products/channel3.ts"
+import { payPalReadTools } from "./paypal/toolkit.ts"
 import { createApp } from "./http.ts"
 import { fakePayPal } from "./paypal/fake.ts"
 import { restPayPal } from "./paypal/rest.ts"
@@ -109,6 +110,10 @@ const app = createApp({
   texts,
   sms: fakeTexts,
   twilioAuthToken,
+  payPalTools:
+    !fake && env.PAYPAL_CLIENT_ID && env.PAYPAL_CLIENT_SECRET
+      ? payPalReadTools({ clientId: env.PAYPAL_CLIENT_ID, clientSecret: env.PAYPAL_CLIENT_SECRET, sandbox: !(env.PAYPAL_API_BASE ?? "").includes("api-m.paypal.com") })
+      : undefined,
   products: env.CHANNEL3_API_KEY ? channel3({ apiKey: env.CHANNEL3_API_KEY }) : undefined,
   ledgerTurn: env.ANTHROPIC_API_KEY ? ledgerAgent({ apiKey: env.ANTHROPIC_API_KEY, model: env.ANTHROPIC_MODEL ?? "claude-sonnet-5-5" }) : undefined,
 })
@@ -143,7 +148,7 @@ const server = serve({ fetch: app.fetch, port }, () => {
   console.log(`  PayPal: ${fake ? "simulated" : "sandbox REST"}`)
   console.log(`  Calls: simulated${text ? ", text" : ""}${twilio ? ", Twilio" : ""}`)
   console.log(`  Online products: ${env.CHANNEL3_API_KEY ? "Channel3" : "off"}`)
-  console.log(`  Ledger agent: ${env.ANTHROPIC_API_KEY ? "Claude" : "off"}`)
+  console.log(`  Ledger agent: ${env.ANTHROPIC_API_KEY ? "Claude" : "off"}${!fake ? ", with PayPal Agent Toolkit read-only tools" : ""}`)
   console.log(`  Places: ${google ? "Google + simulated" : "simulated"}`)
   console.log(`  Texts: ${fakeTexts ? "simulated" : "Twilio"}`)
   console.log(`  MCP: ${publicUrl}/mcp`)

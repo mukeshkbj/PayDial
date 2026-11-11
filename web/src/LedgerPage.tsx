@@ -5,7 +5,7 @@ import { formatUsd } from "../../src/domain/errand.ts"
 import type { LedgerRow } from "../../src/ledger.ts"
 import { navigate } from "./api.ts"
 import { HoldTimeline } from "./HoldTimeline.tsx"
-import { ledgerAdapter, verifyReceipt } from "./ledgerAgent.ts"
+import { ledgerAdapter, payPalTool, verifyReceipt, type PayPalToolSchema } from "./ledgerAgent.ts"
 
 const licence = (import.meta as { env?: Record<string, string | undefined> }).env?.VITE_AG_STUDIO_LICENSE_KEY
 if (licence) AgStudioLicenseManager.setLicenseKey(licence)
@@ -14,7 +14,8 @@ AgStudioModuleRegistry.registerModules([AgStudioAiModule])
 const BRIEF = `You are the Ledger agent for Dial. Dial phones shops that take orders only by phone, and pays them through PayPal.
 The "ledger" data source has one row per errand. Money columns are US dollars: held (authorized on PayPal, not yet captured), paid (captured to the shop), released (voided hold), agreed (the deal total), limit (the customer's ceiling) and blockedAsk (a price the money gate refused).
 outcome and money say where each errand stands. receiptHash is the SHA-256 call receipt; receiptOnOrder says whether it sits in the PayPal order's custom_id.
-Answer questions about holds, captures, voids and blocked deals from the data. Use verify_receipt to check a receipt. Delegate to the widget, page or data agents to build or change the dashboard.
+Answer questions about holds, captures, voids and blocked deals from the data. Use verify_receipt to check a receipt.
+When PayPal's own record matters, use the read-only tools from PayPal's Agent Toolkit: get_order with an errand's payPalOrder, list_disputes and get_dispute for disputes, list_transactions for settled payments. Say when an answer comes from PayPal rather than the ledger. Delegate to the widget, page or data agents to build or change the dashboard.
 You cannot move money. No tool here captures, voids, refunds or pays, and Dial gives no AI one. If asked to, say that only the customer can, at the counter, with their pickup key.`
 
 const usd = { format: new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }) }
@@ -154,7 +155,7 @@ function KeyGate({ wrong }: { wrong: boolean }) {
 export function LedgerPage({ dialKey }: { dialKey?: string }) {
   const key = dialKey ?? remembered()
   const suffix = key ? `/${encodeURIComponent(key)}` : ""
-  const [ledger, setLedger] = useState<{ rows: LedgerRow[]; agent: boolean } | null>()
+  const [ledger, setLedger] = useState<{ rows: LedgerRow[]; agent: boolean; payPalTools?: PayPalToolSchema[] } | null>()
   const [version, setVersion] = useState(0)
   const [agentOpen, setAgentOpen] = useState(false)
   const [editing, setEditing] = useState(false)
@@ -172,6 +173,7 @@ export function LedgerPage({ dialKey }: { dialKey?: string }) {
   const ai = useMemo(() => {
     if (!ledger?.agent) return undefined
     const adapter = ledgerAdapter(`/api/ledger-turn${suffix}`)
+    const payPal = (ledger.payPalTools ?? []).map((schema) => payPalTool(schema, `/api/ledger-paypal${suffix}`))
     return ({ api }: AgAiHarnessSetupParams) =>
       createAiHarness(api as AgStudioApi, ({ tools, builtIn }) => ({
         agents: [
@@ -181,7 +183,7 @@ export function LedgerPage({ dialKey }: { dialKey?: string }) {
             description: "Reads Dial's money ledger and call receipts. It cannot move money.",
             adapter,
             instructions: () => BRIEF,
-            tools: () => [tools.studio.viewSchema(), tools.studio.viewReport(), tools.studio.executeQuery(), verifyReceipt, tools.delegateTo(["widget", "page", "data"])],
+            tools: () => [tools.studio.viewSchema(), tools.studio.viewReport(), tools.studio.executeQuery(), verifyReceipt, ...payPal, tools.delegateTo(["widget", "page", "data"])],
           }),
           directLlmRunner({ ...builtIn.widget, adapter }),
           directLlmRunner({ ...builtIn.page, adapter }),
@@ -192,10 +194,11 @@ export function LedgerPage({ dialKey }: { dialKey?: string }) {
           { label: "Unclaimed holds", prompt: "Which holds are still on PayPal, and for how much?" },
           { label: "Blocked prices", prompt: "Which shops asked for more than the customer's limit?" },
           { label: "Verify a receipt", prompt: "Verify the call receipt of the most recent paid errand." },
+          { label: "Disputes on PayPal", prompt: "Ask PayPal: are there any disputes on our orders?" },
           { label: "Pay the shop", prompt: "Capture the held payment for the shop now." },
         ],
       }))
-  }, [ledger?.agent, suffix])
+  }, [ledger?.agent, ledger?.payPalTools, suffix])
 
   if (ledger === null) return <KeyGate wrong={Boolean(dialKey)} />
   if (!ledger) return <p className="ledger-wait">Reading the ledger…</p>

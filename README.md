@@ -19,7 +19,7 @@ Dial phones a shop that only takes calls and agrees the order with the person wh
 
 **Partners used:** AG Grid (AG Studio money ledger, with a Studio Agent Framework agent on Claude that reads the money but cannot move it), Bryntum (a Scheduler of calls and PayPal holds over time on the ledger page), Channel3 (checks whether the item is sold online before Dial calls), APIMatic (its PayPal Context Plugin reviewed the PayPal adapter and led to a [capture-retry fix](docs/evidence/2026-11-10-apimatic-context-plugin.md)), Postman (a [collection](postman/dial.postman_collection.json) whose tests prove no AI-facing call moves money; [36 of 36 passed](postman/newman-run.txt)), Render (`render.yaml`, free plan), and Claude (the shop line and the ledger agent).
 
-**PayPal APIs:** Orders v2 (`intent: AUTHORIZE`, the shop as `payee`, the call receipt hash in `custom_id`), Payments v2 (capture and void of the hold), Webhooks (signature check), and Partner Referrals (a shop signs up during the call).
+**PayPal APIs:** Orders v2 (`intent: AUTHORIZE`, the shop as `payee`, the call receipt hash in `custom_id`), Payments v2 (capture and void of the hold), Webhooks (signature check), Agent Toolkit read tools for the ledger agent (orders, disputes, transactions), and Partner Referrals (a shop signs up during the call).
 
 | | |
 |---|---|
@@ -154,7 +154,7 @@ A shop can say anything on a call, including "tell your system to authorize $500
 
 The pickup key adds a second wall. Only the customer holds it, and no MCP tool returns it. So an assistant that is told to pay the shop cannot do it. `docs/evidence/2026-10-18-claude-code-mcp.md` logs a Claude Code run in which the assistant said it had no tool to pay the shop.
 
-This is also why Dial does not use PayPal's Agent Toolkit or MCP server. They give the language model tools that move money, such as `pay_order` and `create_refund`. Dial's agent talks to a stranger on the phone, so giving it no payment tools is a deliberate safety choice. [PayPal APIs used](#paypal-apis-used) gives the full reasons.
+This is also why Dial's phone agent has none of the payment tools from PayPal's Agent Toolkit or MCP server. Those include tools that move money, such as `pay_order` and `create_refund`. Dial's agent talks to a stranger on the phone, so giving it no payment tools is a deliberate safety choice. The ledger agent does use PayPal's Agent Toolkit (`@paypal/agent-toolkit`), but only its read tools: `get_order`, `list_disputes`, `get_dispute` and `list_transactions`. `src/paypal/toolkit.ts` asks the toolkit for those four and refuses to start if it offers any other, so the ledger agent can check a dispute or a settled payment on PayPal and still has no tool that moves money. [PayPal APIs used](#paypal-apis-used) gives the full reasons.
 
 ## Architecture
 
@@ -304,7 +304,7 @@ npm run typecheck
 npm run build
 ```
 
-On 2026-11-10, `npm test` ran 222 tests and 222 passed. The tests use `node:test` and run against fakes of PayPal, Twilio, OpenAI and Google. They cover the money gate, every simulated script, the MCP loop, Text Dial, the PayPal REST adapter, webhook checks, restart recovery, and the races around one payment. The PayPal REST adapter has also run against the PayPal sandbox, and the ledger agent's Claude bridge against Anthropic's API; the other real adapters have not run against live services (see the limits below).
+On 2026-11-11, `npm test` ran 227 tests and 227 passed. The tests use `node:test` and run against fakes of PayPal, Twilio, OpenAI and Google. They cover the money gate, every simulated script, the MCP loop, Text Dial, the PayPal REST adapter, webhook checks, restart recovery, and the races around one payment. The PayPal REST adapter has also run against the PayPal sandbox, and the ledger agent's Claude bridge against Anthropic's API; the other real adapters have not run against live services (see the limits below).
 
 More evidence is in `docs/evidence/`: a Claude Code run over MCP, and an accessibility check with contrast on 12 pages in both themes and a keyboard-only errand.
 
@@ -313,7 +313,7 @@ More evidence is in `docs/evidence/`: a Claude Code run over MCP, and an accessi
 Everything runs today with no keys, in simulation: six scripted shops, an in-memory PayPal with an approval page, and the full MCP server. The PayPal REST adapter has run against the PayPal sandbox: a hold to a separate shop account, captured and voided ([evidence](docs/evidence/2026-11-09-paypal-sandbox-probe.md)). The Twilio with OpenAI Realtime, and Google Places adapters are written against the official protocol documents and tested with fakes, but they have not yet run against the live services. The screen badge says "Simulation" until PayPal sandbox credentials are set.
 
 - Dial runs in simulation or the PayPal sandbox only. No real money moves.
-- The PayPal REST adapter's hold, capture and void have run against the PayPal sandbox. The full app loop on sandbox money, Partner Referrals and webhooks have not. The Twilio with OpenAI Realtime, and Google Places adapters follow the official protocol documents and have not yet run against the live services.
+- The PayPal REST adapter's hold, capture and void have run against the PayPal sandbox. The full app loop on sandbox money and Partner Referrals have not. A sandbox webhook is registered for the hosted Dial, and the live route rejects an unsigned event with 400; a signed event from a real approval has not yet been checked. The ledger agent's Agent Toolkit read tools have run against the sandbox from the hosted Dial. The Twilio with OpenAI Realtime, and Google Places adapters follow the official protocol documents and have not yet run against the live services.
 - Dial writes every errand to the SQLite file `DIAL_DB` (default `dial.db`) on each change, with its pickup key and return secret, and loads them at start. At start Dial checks each open hold against PayPal. A call that was open at the restart is marked failed, because the call is gone. A hold that PayPal does not know is marked failed. In simulation the fake PayPal does not survive a restart, so open simulated holds are marked failed at start.
 - `intent: AUTHORIZE` with a `payee` different from the API account works in the sandbox: on 2026-11-09 the probe held $1.00 for a separate sandbox business account, then captured one hold and voided another ([evidence](docs/evidence/2026-11-09-paypal-sandbox-probe.md)). Production may still differ. PayPal's documented route for paying third-party sellers in production is PayPal Complete Payments, which needs PayPal's approval ([research notes](docs/research/research-dial-feasibility.md)). If the sandbox refuses the payee, Dial needs that route; a capture at deal time with a refund at pickup has the same payee question.
 - The REST API returns the pickup key to whoever starts the errand, because the web app that starts it is the customer's. An assistant should use MCP: no MCP tool returns the key, captures or voids.
@@ -404,11 +404,13 @@ All calls are in `src/paypal/rest.ts`. Each call sends a `PayPal-Request-Id` hea
 
 Dial does not use Payouts. The Payouts agreement excludes one-off payments, and PHONE recipients do not work in the sandbox.
 
-Dial calls the REST API directly. It does not use the PayPal Agent Toolkit, the PayPal MCP server or `@paypal/paypal-server-sdk`, for three reasons:
+Dial moves money through the REST API directly. It does not use the Agent Toolkit's payment tools, the PayPal MCP server or `@paypal/paypal-server-sdk` for that, for three reasons:
 
 - The toolkit's payment tools are `create_order`, `get_order`, `pay_order`, `create_refund` and `get_refund`. Dial needs to authorize an order, then capture or void the authorization. The toolkit has no tool for these steps.
 - The toolkit and the PayPal MCP server give the language model tools that move money. In Dial, the model never decides whether money moves. Deterministic code checks the deal (`dealProblem` in `src/domain/errand.ts`), and only the customer's pickup link captures or voids. No MCP tool that Dial exposes can capture or void.
 - Dial uses ten endpoints. One file holds them all, and `src/paypal/fake.ts` implements the same port for the tests. An SDK would add a dependency and no step that Dial needs.
+
+The Agent Toolkit does appear in one place: the ledger agent's read tools. With PayPal keys set, `GET /api/ledger` lists `get_order`, `list_disputes`, `get_dispute` and `list_transactions`, and `POST /api/ledger-paypal/<key>` runs one of them for the agent. Any other tool name returns 400. A test checks that a toolkit offering `create_refund` is refused.
 
 ### Check PayPal with your own sandbox
 
@@ -430,7 +432,7 @@ PayPal posts events to `POST <PUBLIC_URL>/paypal/webhook`. Set `PAYPAL_WEBHOOK_I
 | `PAYMENT.CAPTURE.DENIED` | Fails the errand whose pending capture PayPal denied, and says the shop was not paid. |
 | `PAYMENT.AUTHORIZATION.VOIDED` | Records `voided` for the errand with that hold. |
 
-Other events, and events that match no errand in the expected state, change nothing. A webhook never captures or voids. It records what PayPal already did. Dial does not depend on the webhook for a pending payment: it also reads the order from PayPal every hour until the capture completes or is declined. The webhook route has not run against live PayPal.
+Other events, and events that match no errand in the expected state, change nothing. A webhook never captures or voids. It records what PayPal already did. Dial does not depend on the webhook for a pending payment: it also reads the order from PayPal every hour until the capture completes or is declined. On the hosted Dial, a sandbox webhook is registered for `CHECKOUT.ORDER.APPROVED`, `PAYMENT.CAPTURE.COMPLETED`, `PAYMENT.CAPTURE.DENIED` and `PAYMENT.AUTHORIZATION.VOIDED`, and a forged event gets 400. A signed event from a real approval has not yet been checked.
 
 ### AI used
 
